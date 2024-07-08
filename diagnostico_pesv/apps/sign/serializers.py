@@ -10,7 +10,9 @@ class UserSerializer(serializers.ModelSerializer):
             'email',
             'first_name',
             'last_name',
-            'password'
+            'password',
+            'licensia_sst',
+            'cedula'
         ]
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -24,5 +26,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'username',
             'email',
             'first_name',
-            'last_name'
+            'last_name',
+            'licensia_sst',
+            'cedula'
         ]

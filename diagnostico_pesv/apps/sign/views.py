@@ -4,7 +4,6 @@ from rest_framework.request import Request
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .serializers import UserSerializer, UserDetailSerializer
-from django.shortcuts import get_object_or_404
 from .models import User
 from utils.tokenManagement import get_tokens_for_user  # Asegúrate de importar correctamente la función
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -16,7 +15,11 @@ def login(request):
     try:
         user = User.objects.get(email=request.data['email'])
     except User.DoesNotExist:
-        return Response({'error': 'Este usuario no se encuentra registrado'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Este usuario no se encuentra registrado o esta inactivo'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not user.is_active:
+        return Response({'error': 'Este usuario no se encuentra registrado o esta inactivo'}, status=status.HTTP_400_BAD_REQUEST)
+        
 
     if not user.check_password(request.data['password']):
         return Response({'error': 'Credenciales inválidas'}, status=status.HTTP_400_BAD_REQUEST)
@@ -47,3 +50,15 @@ def register(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Exception as ex:
         return Response({'error': str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])    
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def profile(request):
+    try:
+        user = request.user
+        serializer = UserDetailSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        return Response({'error': str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
