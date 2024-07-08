@@ -23,5 +23,6 @@ API_PREFIX=f"api/{API_V}"
 urlpatterns = [
     path('admin/', admin.site.urls),
     path(f'{API_PREFIX}/sign/', include('apps.sign.urls')),
+    path(f'{API_PREFIX}/companies/', include('apps.company.urls')),
     
 ]

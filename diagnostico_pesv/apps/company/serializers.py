@@ -4,13 +4,13 @@ from .models import Company, Segments
 
 class SegmentSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Segments,
+        model = Segments
         fields = [
             'id',
             'name'
         ]
 
-class UserDetailSerializer(serializers.ModelSerializer):
+class CompanySerializer(serializers.ModelSerializer):
     segment = serializers.PrimaryKeyRelatedField(queryset=Segments.objects.all(), write_only=True)
     segment_detail = SegmentSerializer(source='segment', read_only=True)
     class Meta:
