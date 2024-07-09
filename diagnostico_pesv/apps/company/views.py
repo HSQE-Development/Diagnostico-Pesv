@@ -1,37 +1,80 @@
 from django.shortcuts import render
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+)
 from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .serializers import CompanySerializer
+from .serializers import CompanySerializer, SegmentSerializer
 from .models import Company, Segments
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
+from apps.sign.permissions import IsSuperAdmin, IsConsultor, IsAdmin
 import logging
+from apps.sign.models import User
 
 logger = logging.getLogger(__name__)
+
+
 # Create your views here.
-@api_view(['GET'])
+@api_view(["GET"])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
-def findAll(request:Request):
+def findAll(request: Request):
     """
     Consulta todos los datos segun el criterio del filter
     """
     try:
-        companies = Company.objects.filter(deleted_at=None)
+        if IsSuperAdmin.has_permission(user=request.user) or IsAdmin.has_permission(
+            user=request.user
+        ):
+            companies = Company.objects_with_deleted
+        else:
+            companies = Company.objects.filter(deleted_at=None)
+
         serializer = CompanySerializer(companies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
         logger.error(f"Error en findAll: {str(ex)}")
-        return Response({"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-@api_view(['GET'])
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["POST"])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
-def findById(request:Request, id):
+def save(request: Request):
+    try:
+        nit = request.data.get("nit")
+        print(nit)
+        try:
+            Company.objects.get(nit=nit)
+            return Response(
+                {"error": "La Empresa que intenta registrar ya existe"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Company.DoesNotExist:
+            pass  # Si no existe, continuamos con la creación de la compañía
+
+        serializer = CompanySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findById(request: Request, id):
     """
     Consulta segun el id proporcionado en la url
     """
@@ -40,21 +83,26 @@ def findById(request:Request, id):
         serializer = CompanySerializer(company)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
-        return Response({"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
-@api_view(['PATCH'])
+
+@api_view(["PATCH"])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
-def update(request:Request):
+def update(request: Request):
     """
     Actualiza segun el id proporcionado en el body del cuerpoo, el ID no se pide en la url
     """
     try:
         id = request.data.get("id")
         if id is None:
-            return Response({"error": "No se proporciona el id que se va a actualizar"}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "No se proporciona el id que se va a actualizar"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         name = request.data.get("name")
         nit = request.data.get("nit")
         size = request.data.get("size")
@@ -65,9 +113,9 @@ def update(request:Request):
         email = request.data.get("email")
         acquired_certification = request.data.get("acquired_certification")
         diagnosis = request.data.get("diagnosis")
-        
+
         company = get_object_or_404(Company, id=id)
-        
+
         if name is not None:
             company.name = name
         if nit is not None:
@@ -88,18 +136,20 @@ def update(request:Request):
             company.acquired_certification = acquired_certification
         if diagnosis is not None:
             company.diagnosis = diagnosis
-        
+
         company.save()
         serializer = CompanySerializer(company)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
-        return Response({"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    
-@api_view(['DELETE'])
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["DELETE"])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
-def delete(request:Request, id):
+def delete(request: Request, id):
     """
     Elimina segun el id proporcionado en la url, se usa soft deletes, osea no elimina el registro como tal
     """
@@ -109,5 +159,24 @@ def delete(request:Request, id):
         serializer = CompanySerializer(company)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
-        return Response({"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findAllSegments(request: Request):
+    """
+    Consulta todos los datos segun el criterio del filter
+    """
+    try:
+        segments = Segments.objects.filter(deleted_at=None)
+        serializer = SegmentSerializer(segments, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        logger.error(f"Error en findAll: {str(ex)}")
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

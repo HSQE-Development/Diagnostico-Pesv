@@ -14,15 +14,20 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
-API_V="v1"
-API_PREFIX=f"api/{API_V}"
+API_V = "v1"
+API_PREFIX = f"api/{API_V}"
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path(f'{API_PREFIX}/sign/', include('apps.sign.urls')),
-    path(f'{API_PREFIX}/companies/', include('apps.company.urls')),
-    
+    path("admin/", admin.site.urls),
+    path(f"{API_PREFIX}/sign/", include("apps.sign.urls")),
+    path(f"{API_PREFIX}/companies/", include("apps.company.urls")),
 ]
+# Con esta linea se puede acceder a los archivos media guardados en el servidor
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
