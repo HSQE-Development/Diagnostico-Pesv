@@ -8,8 +8,13 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .serializers import CompanySerializer, SegmentSerializer
-from .models import Company, Segments
+from .serializers import (
+    CompanySerializer,
+    SegmentSerializer,
+    DedicationSerializer,
+    CompanySizeSerializer,
+)
+from .models import Company, Segments, Dedication, CompanySize
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
@@ -113,6 +118,7 @@ def update(request: Request):
         email = request.data.get("email")
         acquired_certification = request.data.get("acquired_certification")
         diagnosis = request.data.get("diagnosis")
+        consultor_id = request.data.get("consultor")
 
         company = get_object_or_404(Company, id=id)
 
@@ -123,7 +129,13 @@ def update(request: Request):
         if size is not None:
             company.size = size
         if segment_id is not None:
-            company.segment_id = segment_id
+            segment = Segments.objects.get(pk=segment_id)
+            if not segment:
+                return Response(
+                    {"error": "No se encontro el segmento"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            company.segment = segment
         if dependant is not None:
             company.dependant = dependant
         if dependant_phone is not None:
@@ -136,6 +148,19 @@ def update(request: Request):
             company.acquired_certification = acquired_certification
         if diagnosis is not None:
             company.diagnosis = diagnosis
+        if consultor_id is not None:
+            consultor = User.objects.get(pk=consultor_id)
+            if not consultor:
+                return Response(
+                    {"error": "No se encontro el consultor"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if Company.objects.filter(consultor=consultor).exists():
+                return Response(
+                    {"error": "Este consultor ya se encuentra asignado"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            company.consultor = consultor
 
         company.save()
         serializer = CompanySerializer(company)
@@ -176,7 +201,43 @@ def findAllSegments(request: Request):
         serializer = SegmentSerializer(segments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
-        logger.error(f"Error en findAll: {str(ex)}")
+        logger.error(f"Error en findAllSegments: {str(ex)}")
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findAllDedications(request: Request):
+    """
+    Consulta todos los datos segun el criterio del filter
+    """
+    try:
+        dedications = Dedication.objects.filter(deleted_at=None)
+        serializer = DedicationSerializer(dedications, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        logger.error(f"Error en findAllDedications: {str(ex)}")
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findcompanySizeByDedicactionId(request: Request, id):
+    """
+    Consulta todos los datos segun el criterio del filter
+    """
+    try:
+        companySizes = CompanySize.objects.filter(deleted_at=None, dedication=id)
+        serializer = CompanySizeSerializer(companySizes, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        logger.error(f"Error en findAllDedications: {str(ex)}")
         return Response(
             {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

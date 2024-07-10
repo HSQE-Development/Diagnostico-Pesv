@@ -52,12 +52,9 @@ def login(request):
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def register(request):
     try:
-        if IsConsultor.has_permission(request.user):
-            return Response(
-                {"error": "No tienes los privilegios para esta operacion"},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        else:
+        if IsAdmin().has_permission(request.user) or IsSuperAdmin().has_permission(
+            request.user
+        ):
             password = request.data.get("password")
             serializer = UserSerializer(data=request.data)
             groups = request.data.get("groups", [])
@@ -78,6 +75,12 @@ def register(request):
                     status=status.HTTP_201_CREATED,
                 )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        else:
+            return Response(
+                {"error": "No tienes los privilegios para esta operacion"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
     except Exception as ex:
         return Response(
             {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -23,7 +23,3 @@ class IsAdmin(BasePermission):
 class IsConsultor(BasePermission):
     def has_permission(user: User):
         return user and user.groups.filter(name=GroupTypes.CONSULTOR.value).exists()
-
-    def belongs(user: User):
-        consultan_group = Group.objects.get(name=GroupTypes.CONSULTOR.value)
-        return user.groups.filter(name=consultan_group).exists()
