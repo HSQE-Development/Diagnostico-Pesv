@@ -1,0 +1,47 @@
+[
+    {
+        "model": "company.DriverQuestion",
+        "pk": "1",
+        "fields": {
+            "name": "Cantidad de trabajadores directos contratados en el cargo de conductores ",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.DriverQuestion",
+        "pk": "2",
+        "fields": {
+            "name": "Cantidad de trabajadores administrativos, directivos, operativos o de apoyo que conducen para fines misionales",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.DriverQuestion",
+        "pk": "3",
+        "fields": {
+            "name": "Cantidad de contratistas y/o afiliados que conducen para cumplir su contrato con la empresa",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.DriverQuestion",
+        "pk": "4",
+        "fields": {
+            "name": "Cantidad de personal vinculado mediante tercerización, Subcontratación, outsourcing o intermediación laboral que conduce para desarrollar sus funciones",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.DriverQuestion",
+        "pk": "5",
+        "fields": {
+            "name": "Otros conductores que conducen para desarrollar sus funciones contratadas",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    }
+]

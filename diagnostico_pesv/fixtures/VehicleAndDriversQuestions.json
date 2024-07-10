@@ -1,0 +1,65 @@
+[
+    {
+        "model": "company.VehicleQuestions",
+        "pk": "1",
+        "fields": {
+            "name": "Número de motocicletas, patinetas",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.VehicleQuestions",
+        "pk": "2",
+        "fields": {
+            "name": "Número de vehículos livianos",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.VehicleQuestions",
+        "pk": "3",
+        "fields": {
+            "name": "Número de vehículos Mixer",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.VehicleQuestions",
+        "pk": "4",
+        "fields": {
+            "name": "Número de vehículos Furgón",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.VehicleQuestions",
+        "pk": "5",
+        "fields": {
+            "name": "Número de vehiculos de carga (volquetas, tractomulas)",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.VehicleQuestions",
+        "pk": "6",
+        "fields": {
+            "name": "Número de maquinaria amarilla (Cargadores)",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "company.VehicleQuestions",
+        "pk": "7",
+        "fields": {
+            "name": "Número de vehículos no automotores (bicicletas, triciclo, tracción animal)",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    }
+]

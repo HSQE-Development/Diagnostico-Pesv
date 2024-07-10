@@ -1,5 +1,14 @@
 from rest_framework import serializers
-from .models import Company, Segments, Dedication, CompanySize
+from .models import (
+    Company,
+    Segments,
+    Dedication,
+    CompanySize,
+    VehicleQuestions,
+    Driver,
+    Fleet,
+    DriverQuestion,
+)
 from apps.sign.models import User
 from apps.sign.serializers import UserDetailSerializer
 
@@ -54,7 +63,6 @@ class CompanySerializer(serializers.ModelSerializer):
             "id",
             "name",
             "nit",
-            "size",
             "segment",
             "segment_detail",
             "dependant",
@@ -69,4 +77,72 @@ class CompanySerializer(serializers.ModelSerializer):
             "dedication_detail",
             "company_size",
             "company_size_detail",
+        ]
+
+
+class VehicleQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VehicleQuestions
+        fields = [
+            "id",
+            "name",
+        ]
+
+
+class FleetSerializer(serializers.ModelSerializer):
+    vehicle_question = serializers.PrimaryKeyRelatedField(
+        queryset=VehicleQuestions.objects.all(), write_only=True
+    )
+    vehicle_question_detail = VehicleQuestionSerializer(
+        source="vehicle_question", read_only=True
+    )
+
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=Company.objects.all(), write_only=True
+    )
+    company_detail = CompanySerializer(source="company", read_only=True)
+
+    class Meta:
+        model = Fleet
+        fields = [
+            "id",
+            "quantity_owned",
+            "quantity_third_party",
+            "vehicle_question",
+            "vehicle_question_detail",
+            "company",
+            "company_detail",
+        ]
+
+
+class DriverQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DriverQuestion
+        fields = [
+            "id",
+            "name",
+        ]
+
+
+class DriverSerializer(serializers.ModelSerializer):
+    driver_question = serializers.PrimaryKeyRelatedField(
+        queryset=DriverQuestion.objects.all(), write_only=True
+    )
+    driver_question_detail = DriverQuestionSerializer(
+        source="driver_question", read_only=True
+    )
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=Company.objects.all(), write_only=True
+    )
+    company_detail = CompanySerializer(source="company", read_only=True)
+
+    class Meta:
+        model = Driver
+        fields = [
+            "id",
+            "quantity",
+            "driver_question",
+            "driver_question_detail",
+            "company",
+            "company_detail",
         ]

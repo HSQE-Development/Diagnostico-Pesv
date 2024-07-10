@@ -23,7 +23,6 @@ class Segments(SoftDeletes, Timestampable):
 class Company(SoftDeletes, Timestampable):
     name = models.CharField(max_length=100, unique=True, null=None)
     nit = models.CharField(max_length=20, unique=True, null=None)
-    size = models.IntegerField()
     segment = models.ForeignKey(Segments, on_delete=models.SET_NULL, null=True)
     dependant = models.CharField(max_length=200, null=True)
     dependant_phone = models.CharField(max_length=20, null=True)
@@ -36,3 +35,24 @@ class Company(SoftDeletes, Timestampable):
     )
     dedication = models.ForeignKey(Dedication, on_delete=models.CASCADE, null=True)
     company_size = models.ForeignKey(CompanySize, on_delete=models.CASCADE, null=True)
+
+
+class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico
+    name = models.CharField(max_length=255, unique=True, null=None)
+
+
+class Fleet(SoftDeletes, Timestampable):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    vehicle_questions = models.ForeignKey(VehicleQuestions, on_delete=models.CASCADE)
+    quantity_owned = models.IntegerField(default=0, null=None)
+    quantity_third_party = models.IntegerField(default=0, null=None)
+
+
+class DriverQuestion(SoftDeletes, Timestampable):
+    name = models.CharField(max_length=255)
+
+
+class Driver(SoftDeletes, Timestampable):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    driver_questions = models.ForeignKey(DriverQuestion, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=0, null=None)

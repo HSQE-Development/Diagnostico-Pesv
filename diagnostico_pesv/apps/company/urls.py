@@ -8,6 +8,10 @@ from .views import (
     findAllSegments,
     findAllDedications,
     findcompanySizeByDedicactionId,
+    findAllVehicleQuestions,
+    findAllDriverQuestions,
+    findFleetsByCompanyId,
+    findDriversByCompanyId,
 )
 
 urlpatterns = [
@@ -22,5 +26,23 @@ urlpatterns = [
         "findcompanySizeByDedicactionId/<int:id>",
         findcompanySizeByDedicactionId,
         name="findcompanySizeByDedicactionId",
+    ),
+    path(
+        "findAllVehicleQuestions/",
+        findAllVehicleQuestions,
+        name="findAllVehicleQuestions",
+    ),
+    path(
+        "findAllDriverQuestions/", findAllDriverQuestions, name="findAllDriverQuestions"
+    ),
+    path(
+        "findFleetsByCompanyId/<int:companyId>",
+        findFleetsByCompanyId,
+        name="findFleetsByCompanyId",
+    ),
+    path(
+        "findDriversByCompanyId/<int:companyId>",
+        findDriversByCompanyId,
+        name="findDriversByCompanyId",
     ),
 ]
