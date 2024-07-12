@@ -1,3 +1,4 @@
+import traceback
 from django.shortcuts import render
 from rest_framework.decorators import (
     api_view,
@@ -389,42 +390,88 @@ def saveAnswerCuestions(request: Request):
     try:
         vehicle_data = request.data.get("vehicleData", [])
         driver_data = request.data.get("driverData", [])
+
         vehicle_errors = []
         driver_errors = []
-        # Validar y guardar los datos de los vehículos
+
+        # Procesar y validar datos de vehículos
         for vehicle in vehicle_data:
             company_id = vehicle.get("company")
-            if not Company.objects.filter(pk=company_id).exists():
-                vehicle_errors.append(
-                    {"company": f"La empresa no existe o esta inactiva."}
+
+            company: Company = Company.objects.get(pk=company_id)
+            total_vehicles = (
+                functionUtils.calculate_total_vehicles_quantities_for_company(
+                    vehicle_data, company_id
                 )
-                continue
-            vehicle_instance = Fleet.objects.filter(
+            )
+            total_drivers = (
+                functionUtils.calculate_total_drivers_quantities_for_company(
+                    driver_data, company_id
+                )
+            )
+
+            company_size_name = functionUtils.determine_company_size(
+                company.dedication.id, total_vehicles, total_drivers
+            )
+
+            company_size = get_object_or_404(
+                CompanySize, name=company_size_name, dedication=company.dedication.id
+            )
+
+            # Guardar el tamaño de la organización en la instancia de Company
+            company.company_size = company_size
+            company.save()
+
+            # Procesar el vehículo
+            fleet_instance = Fleet.objects.filter(
                 company=company_id, vehicle_question=vehicle.get("vehicle_question")
             ).first()
-            serializer_vehicle = FleetSerializer(
-                instance=vehicle_instance, data=vehicle
-            )
-            if serializer_vehicle.is_valid():
-                serializer_vehicle.save()
+
+            serializer_fleet = FleetSerializer(instance=fleet_instance, data=vehicle)
+            if serializer_fleet.is_valid():
+                serializer_fleet.save()
             else:
-                vehicle_errors.append(serializer_vehicle.errors)
-        # Validar y guardar los datos de los conductores
+                vehicle_errors.append(serializer_fleet.errors)
+
+        # Procesar y validar datos de conductores
         for driver in driver_data:
             company_id = driver.get("company")
-            if not Company.objects.filter(pk=company_id).exists():
-                driver_errors.append(
-                    {"company": f"La empresa no existe o esta inactiva."}
+
+            company = get_object_or_404(Company, pk=company_id)
+            total_vehicles = (
+                functionUtils.calculate_total_vehicles_quantities_for_company(
+                    vehicle_data, company_id
                 )
-                continue  # Saltar a la siguiente iteración si la empresa no existe
+            )
+            total_drivers = (
+                functionUtils.calculate_total_drivers_quantities_for_company(
+                    driver_data, company_id
+                )
+            )
+
+            company_size_name = functionUtils.determine_company_size(
+                company.dedication.id, total_vehicles, total_drivers
+            )
+
+            company_size = get_object_or_404(
+                CompanySize, name=company_size_name, dedication=company.dedication.id
+            )
+
+            # Guardar el tamaño de la organización en la instancia de Company
+            company.company_size = company_size
+            company.save()
+
+            # Procesar el conductor
             driver_instance = Driver.objects.filter(
                 company=company_id, driver_question=driver.get("driver_question")
             ).first()
+
             serializer_driver = DriverSerializer(instance=driver_instance, data=driver)
             if serializer_driver.is_valid():
                 serializer_driver.save()
             else:
                 driver_errors.append(serializer_driver.errors)
+
         if vehicle_errors or driver_errors:
             return Response(
                 {"vehicleErrors": vehicle_errors, "driverErrors": driver_errors},
@@ -440,6 +487,31 @@ def saveAnswerCuestions(request: Request):
         )
 
     except Exception as ex:
+        tb_str = traceback.format_exc()  # Formatear la traza del error
         return Response(
-            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": str(ex), "traceback": tb_str},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+@api_view(["POST"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def findSizeByCounts(request):
+    min_vehicle = request.query_params.get("min_vehicle")
+    max_vehicle = request.query_params.get("max_vehicle")
+    min_driver = request.query_params.get("min_driver")
+    max_driver = request.query_params.get("max_driver")
+
+    queryset = CompanySize.objects.all()
+    if min_vehicle is not None:
+        queryset = queryset.filter(vehicle_min__gte=min_vehicle)
+    if max_vehicle is not None:
+        queryset = queryset.filter(vehicle_max__lte=max_vehicle)
+    if min_driver is not None:
+        queryset = queryset.filter(driver_min__gte=min_driver)
+    if max_driver is not None:
+        queryset = queryset.filter(driver_max__lte=max_driver)
+
+    serializer = CompanySizeSerializer(queryset, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

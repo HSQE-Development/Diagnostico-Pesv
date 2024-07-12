@@ -13,6 +13,7 @@ from .views import (
     findFleetsByCompanyId,
     findDriversByCompanyId,
     saveAnswerCuestions,
+    findSizeByCounts,
 )
 
 urlpatterns = [
@@ -51,5 +52,10 @@ urlpatterns = [
         "saveAnswerCuestions",
         saveAnswerCuestions,
         name="saveAnswerCuestions",
+    ),
+    path(
+        "findSizeByCounts",
+        findSizeByCounts,
+        name="findSizeByCounts",
     ),
 ]

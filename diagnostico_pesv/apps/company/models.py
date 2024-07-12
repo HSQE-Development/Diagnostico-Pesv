@@ -13,6 +13,14 @@ class CompanySize(SoftDeletes, Timestampable):
     )
     name = models.CharField(max_length=255)
     description = models.TextField()
+    vehicle_min = models.IntegerField(default=0, null=False)
+    vehicle_max = models.IntegerField(
+        default=0, null=False, db_comment="El valor -1 representa sin Limite"
+    )
+    driver_min = models.IntegerField(default=0, null=False)
+    driver_max = models.IntegerField(
+        default=0, null=False, db_comment="El valor -1 representa sin Limite"
+    )
 
 
 class Segments(SoftDeletes, Timestampable):
@@ -47,13 +55,13 @@ class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnost
 class Fleet(SoftDeletes, Timestampable):
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
     vehicle_question = models.ForeignKey(VehicleQuestions, on_delete=models.CASCADE)
-    quantity_owned = models.IntegerField(default=0, null=None)
-    quantity_third_party = models.IntegerField(default=0, null=None)
-    quantity_arrended = models.IntegerField(default=0, null=None)
-    quantity_contractors = models.IntegerField(default=0, null=None)
-    quantity_intermediation = models.IntegerField(default=0, null=None)
-    quantity_leasing = models.IntegerField(default=0, null=None)
-    quantity_renting= models.IntegerField(default=0, null=None)
+    quantity_owned = models.IntegerField(default=0, null=False)
+    quantity_third_party = models.IntegerField(default=0, null=False)
+    quantity_arrended = models.IntegerField(default=0, null=False)
+    quantity_contractors = models.IntegerField(default=0, null=False)
+    quantity_intermediation = models.IntegerField(default=0, null=False)
+    quantity_leasing = models.IntegerField(default=0, null=False)
+    quantity_renting = models.IntegerField(default=0, null=False)
 
 
 class DriverQuestion(SoftDeletes, Timestampable):
@@ -63,4 +71,4 @@ class DriverQuestion(SoftDeletes, Timestampable):
 class Driver(SoftDeletes, Timestampable):
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
     driver_question = models.ForeignKey(DriverQuestion, on_delete=models.CASCADE)
-    quantity = models.IntegerField(default=0, null=None)
+    quantity = models.IntegerField(default=0, null=False)
