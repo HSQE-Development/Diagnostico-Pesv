@@ -12,6 +12,7 @@ from .views import (
     findAllDriverQuestions,
     findFleetsByCompanyId,
     findDriversByCompanyId,
+    saveAnswerCuestions,
 )
 
 urlpatterns = [
@@ -27,6 +28,7 @@ urlpatterns = [
         findcompanySizeByDedicactionId,
         name="findcompanySizeByDedicactionId",
     ),
+    # Questions PESV debe moverse a una nueva app, por temas de tiempo de entrega se dejan aqui
     path(
         "findAllVehicleQuestions/",
         findAllVehicleQuestions,
@@ -44,5 +46,10 @@ urlpatterns = [
         "findDriversByCompanyId/<int:companyId>",
         findDriversByCompanyId,
         name="findDriversByCompanyId",
+    ),
+    path(
+        "saveAnswerCuestions",
+        saveAnswerCuestions,
+        name="saveAnswerCuestions",
     ),
 ]

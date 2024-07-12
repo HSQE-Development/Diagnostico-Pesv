@@ -34,6 +34,7 @@ from django.shortcuts import get_object_or_404
 from apps.sign.permissions import IsSuperAdmin, IsConsultor, IsAdmin
 import logging
 from apps.sign.models import User
+from utils import functionUtils
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,15 @@ def save(request: Request):
     try:
         nit = request.data.get("nit")
         consultor_id = request.data.get("consultor")
+        dependant_phone = request.data.get("dependant_phone")
+        dependant_position = request.data.get("dependant_position")
+
+        valuesToNone = [dependant_phone, dependant_position]
+        transformed_values = [
+            functionUtils.blank_to_null(value) for value in valuesToNone
+        ]
+        request.data["dependant_phone"] = transformed_values[0]
+        request.data["dependant_position"] = transformed_values[1]
         try:
             consultor = User.objects.get(pk=consultor_id)
         except User.DoesNotExist:
@@ -77,7 +87,7 @@ def save(request: Request):
                 {"error": "No se encontro el consultor"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if Company.objects.filter(consultor=consultor, deleted_at=None).exists():
+        if Company.objects.filter(consultor=consultor_id, deleted_at=None).exists():
             return Response(
                 {"error": "Este consultor ya se encuentra asignado"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -90,7 +100,6 @@ def save(request: Request):
             )
         except Company.DoesNotExist:
             pass  # Si no existe, continuamos con la creación de la compañía
-        print(request.data)
         serializer = CompanySerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -368,6 +377,69 @@ def findDriversByCompanyId(request: Request, companyId):
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
         logger.error(f"Error en findAllDedications: {str(ex)}")
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["POST"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def saveAnswerCuestions(request: Request):
+    try:
+        vehicle_data = request.data.get("vehicleData", [])
+        driver_data = request.data.get("driverData", [])
+        vehicle_errors = []
+        driver_errors = []
+        # Validar y guardar los datos de los vehículos
+        for vehicle in vehicle_data:
+            company_id = vehicle.get("company")
+            if not Company.objects.filter(pk=company_id).exists():
+                vehicle_errors.append(
+                    {"company": f"La empresa no existe o esta inactiva."}
+                )
+                continue
+            vehicle_instance = Fleet.objects.filter(
+                company=company_id, vehicle_question=vehicle.get("vehicle_question")
+            ).first()
+            serializer_vehicle = FleetSerializer(
+                instance=vehicle_instance, data=vehicle
+            )
+            if serializer_vehicle.is_valid():
+                serializer_vehicle.save()
+            else:
+                vehicle_errors.append(serializer_vehicle.errors)
+        # Validar y guardar los datos de los conductores
+        for driver in driver_data:
+            company_id = driver.get("company")
+            if not Company.objects.filter(pk=company_id).exists():
+                driver_errors.append(
+                    {"company": f"La empresa no existe o esta inactiva."}
+                )
+                continue  # Saltar a la siguiente iteración si la empresa no existe
+            driver_instance = Driver.objects.filter(
+                company=company_id, driver_question=driver.get("driver_question")
+            ).first()
+            serializer_driver = DriverSerializer(instance=driver_instance, data=driver)
+            if serializer_driver.is_valid():
+                serializer_driver.save()
+            else:
+                driver_errors.append(serializer_driver.errors)
+        if vehicle_errors or driver_errors:
+            return Response(
+                {"vehicleErrors": vehicle_errors, "driverErrors": driver_errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "vehicleData": vehicle_data,
+                "driverData": driver_data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    except Exception as ex:
         return Response(
             {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

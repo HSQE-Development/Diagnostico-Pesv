@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "django_seed",
     "apps.sign",
     "apps.company",
+    "apps.diagnosis",
 ]
 
 MIDDLEWARE = [
