@@ -82,6 +82,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "dedication_detail",
             "company_size",
             "company_size_detail",
+            "diagnosis_step",
         ]
 
     def validate(self, data):

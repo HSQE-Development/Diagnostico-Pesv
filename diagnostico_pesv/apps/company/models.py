@@ -46,6 +46,7 @@ class Company(SoftDeletes, Timestampable):
     company_size = models.ForeignKey(
         CompanySize, on_delete=models.SET_NULL, null=True, blank=True, default=None
     )
+    diagnosis_step = models.IntegerField(null=False, default=0)
 
 
 class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico

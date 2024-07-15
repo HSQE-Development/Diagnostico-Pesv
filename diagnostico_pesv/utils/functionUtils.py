@@ -1,3 +1,6 @@
+import unicodedata
+
+
 def blank_to_null(data: str):
     """
     Transforma valores en blanco a None.
@@ -82,3 +85,10 @@ def calculate_total_drivers_quantities_for_company(driver_data, company_id):
         if driver.get("company") == company_id:
             total_drivers += driver.get("quantity", 0)
     return total_drivers
+
+
+def eliminar_tildes(texto):
+    # Normalizar el texto en forma NFD (Canonical Decomposition)
+    nfkd_form = unicodedata.normalize("NFD", texto)
+    # Filtrar los caracteres que no sean marcas diacríticas (Mn)
+    return "".join([c for c in nfkd_form if not unicodedata.category(c) == "Mn"])

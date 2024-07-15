@@ -1,0 +1,29 @@
+[
+    {
+        "model": "diagnosis.Diagnosis_Type",
+        "pk": "1",
+        "fields": {
+            "name": "BASICO",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis.Diagnosis_Type",
+        "pk": "2",
+        "fields": {
+            "name": "INTERMEDIO",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis.Diagnosis_Type",
+        "pk": "3",
+        "fields": {
+            "name": "AVANZADO",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    }
+]

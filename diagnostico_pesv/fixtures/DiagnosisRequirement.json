@@ -1,0 +1,209 @@
+[
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "1",
+        "fields": {
+            "name": "Líder del diseño e implementación del PESV",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "2",
+        "fields": {
+            "name": "Comité de seguridad vial",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "3",
+        "fields": {
+            "name": "Política del PESV",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "4",
+        "fields": {
+            "name": "Diagnóstico",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "5",
+        "fields": {
+            "name": "Objetivos y metas del PESV",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "6",
+        "fields": {
+            "name": "Programas de gestión de riesgos críticos y factores de desempeño",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "7",
+        "fields": {
+            "name": "Caracterización, evaluación y control de riesgos",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "8",
+        "fields": {
+            "name": "Plan anual de trabajo",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "9",
+        "fields": {
+            "name": "Competencia y plan anual de formación",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "10",
+        "fields": {
+            "name": "Responsabilidad y comportamiento seguro",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "11",
+        "fields": {
+            "name": "Plan de preparación y respuesta ante emergencias viales",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "12",
+        "fields": {
+            "name": "Investigación interna de siniestros viales",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "13",
+        "fields": {
+            "name": "Vías seguras administradas por la organización",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "14",
+        "fields": {
+            "name": "Planificación de desplazamientos laborales",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "15",
+        "fields": {
+            "name": "Inspección de vehículos y equipos",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "16",
+        "fields": {
+            "name": "Mantenimiento y control de vehículos seguros y equipos",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "17",
+        "fields": {
+            "name": "Gestión del cambio y gestión de contratistas",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "18",
+        "fields": {
+            "name": "Archivo y retención documental",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "19",
+        "fields": {
+            "name": "Indicadores y reporte de autogestión PESV",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "20",
+        "fields": {
+            "name": "Registro y análisis estadístico de siniestros viales",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "21",
+        "fields": {
+            "name": "Auditoría Anual",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "22",
+        "fields": {
+            "name": "Mejora continua, acciones preventivas y correctivas",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis_requirement.Diagnosis_Requirement",
+        "pk": "23",
+        "fields": {
+            "name": "Mecanismos de comunicación y participación",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    }
+]

@@ -387,6 +387,7 @@ def findDriversByCompanyId(request: Request, companyId):
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def saveAnswerCuestions(request: Request):
+    """Ester servicio se puede mejorar en logica y reutilizaion de codigo por favor cualquier idea sera bienvenida"""
     try:
         vehicle_data = request.data.get("vehicleData", [])
         driver_data = request.data.get("driverData", [])
@@ -420,6 +421,7 @@ def saveAnswerCuestions(request: Request):
 
             # Guardar el tamaño de la organización en la instancia de Company
             company.company_size = company_size
+            company.diagnosis_step = 2
             company.save()
 
             # Procesar el vehículo
@@ -459,6 +461,7 @@ def saveAnswerCuestions(request: Request):
 
             # Guardar el tamaño de la organización en la instancia de Company
             company.company_size = company_size
+            company.diagnosis_step = 2
             company.save()
 
             # Procesar el conductor
