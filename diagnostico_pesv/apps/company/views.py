@@ -421,7 +421,7 @@ def saveAnswerCuestions(request: Request):
 
             # Guardar el tamaño de la organización en la instancia de Company
             company.company_size = company_size
-            company.diagnosis_step = 2
+            company.diagnosis_step = 1
             company.save()
 
             # Procesar el vehículo
@@ -461,7 +461,7 @@ def saveAnswerCuestions(request: Request):
 
             # Guardar el tamaño de la organización en la instancia de Company
             company.company_size = company_size
-            company.diagnosis_step = 2
+            company.diagnosis_step = 1
             company.save()
 
             # Procesar el conductor

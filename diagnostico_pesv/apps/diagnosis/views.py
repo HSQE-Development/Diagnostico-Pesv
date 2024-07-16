@@ -29,17 +29,51 @@ from utils.functionUtils import eliminar_tildes
 def findQuestionsByCompanySize(request: Request):
     try:
         companId = request.query_params.get("company")
+        group_by_step = (
+            request.query_params.get("group_by_step", "false").lower() == "true"
+        )
         company: Company = Company.objects.get(pk=companId)
-
         size_name = eliminar_tildes(company.company_size.name)
-        diagnosis_types = Diagnosis_Type.objects.filter(name=size_name).first()
-        diagnosisQuestions = Diagnosis_Questions.objects.filter(
-            diagnosis_type=diagnosis_types
-        )
-        serialized_questions = Diagnosis_QuestionsSerializer(
-            diagnosisQuestions, many=True
-        )
-        return Response(serialized_questions.data, status=status.HTTP_200_OK)
+        diagnosis_type = Diagnosis_Type.objects.filter(name=size_name).first()
+        if group_by_step:
+            # Fetch and group questions by step including requirement.name
+            diagnosis_questions = Diagnosis_Questions.objects.filter(
+                diagnosis_type=diagnosis_type
+            ).order_by("step")
+
+            grouped_questions = {}
+            for question in diagnosis_questions:
+                if question.step not in grouped_questions:
+                    grouped_questions[question.step] = {
+                        "step": question.step,
+                        "requirement_name": question.requirement.name,
+                        "questions": [],
+                    }
+                grouped_questions[question.step]["questions"].append(question)
+
+            grouped_questions_list = [
+                {
+                    "step": group_data["step"],
+                    "requirement_name": group_data["requirement_name"],
+                    "questions": Diagnosis_QuestionsSerializer(
+                        group_data["questions"], many=True, context={"request": request}
+                    ).data,
+                }
+                for group_data in grouped_questions.values()
+            ]
+
+            return Response(grouped_questions_list, status=status.HTTP_200_OK)
+        else:
+
+            size_name = eliminar_tildes(company.company_size.name)
+            diagnosis_types = Diagnosis_Type.objects.filter(name=size_name).first()
+            diagnosisQuestions = Diagnosis_Questions.objects.filter(
+                diagnosis_type=diagnosis_types
+            ).order_by("step")
+            serialized_questions = Diagnosis_QuestionsSerializer(
+                diagnosisQuestions, many=True
+            )
+            return Response(serialized_questions.data, status=status.HTTP_200_OK)
     except Exception as ex:
         return Response(
             {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -100,7 +134,23 @@ def uploadDiagnosisQuestions(request: Request):
             "variable_value": 50,
         }
 
-        serializer = Diagnosis_QuestionsSerializer(data=question_data)
+        # Verificar si ya existe una entrada con los mismos valores
+        existing_question = Diagnosis_Questions.objects.filter(
+            cycle=question_data["cycle"],
+            step=question_data["step"],
+            requirement=question_data["requirement"],
+            name=question_data["name"],
+            diagnosis_type=question_data["diagnosis_type"],
+        ).first()
+
+        if existing_question:
+            # Opcional: puedes actualizar el registro existente si es necesario
+            serializer = Diagnosis_QuestionsSerializer(
+                existing_question, data=question_data
+            )
+        else:
+            serializer = Diagnosis_QuestionsSerializer(data=question_data)
+
         if serializer.is_valid():
             serializer.save()
             processed_data.append(serializer.data)
