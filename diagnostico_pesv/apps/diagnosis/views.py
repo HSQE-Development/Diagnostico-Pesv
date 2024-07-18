@@ -1,3 +1,4 @@
+import traceback
 from django.shortcuts import render
 from rest_framework.decorators import (
     api_view,
@@ -17,10 +18,16 @@ import base64
 import pandas as pd
 from io import BytesIO
 from apps.diagnosis_requirement.models import Diagnosis_Requirement
-from .models import Diagnosis_Questions, Diagnosis_Type
-from .serializers import Diagnosis_QuestionsSerializer
+from .models import Diagnosis_Questions, Diagnosis_Type, CheckList
+from .serializers import Diagnosis_QuestionsSerializer, CheckListSerializer
 from apps.company.models import Company
-from utils.functionUtils import eliminar_tildes
+from utils.functionUtils import eliminar_tildes, blank_to_null
+from django.db import transaction
+from docx import Document
+from io import BytesIO
+import os
+from django.conf import settings
+from .helper import *
 
 
 @api_view(["GET"])
@@ -162,3 +169,115 @@ def uploadDiagnosisQuestions(request: Request):
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
     return Response(processed_data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def saveDiagnosis(request):
+    try:
+        diagnosis_data = request.data.get("diagnosis_data", [])
+        diagnosis_errors = []
+
+        with transaction.atomic():
+            for diagnosis in diagnosis_data:
+                company_id = diagnosis.get("company")
+                company = get_object_or_404(Company, pk=company_id)
+                company.diagnosis_step = 2
+                company.save()
+
+                question_id = diagnosis.get("question")
+                diagnosis_instance = CheckList.objects.filter(
+                    company=company_id, question=question_id
+                ).first()
+
+                # Actualizar o crear nueva instancia de CheckList
+                diagnosis["verify_document"] = blank_to_null(
+                    diagnosis.get("verify_document")
+                )
+                diagnosis["observation"] = blank_to_null(diagnosis.get("observation"))
+
+                if diagnosis["observation"] is None:
+                    diagnosis["observation"] = "SIN OBSERVACIONES"
+                serializer = CheckListSerializer(
+                    instance=diagnosis_instance, data=diagnosis
+                )
+                if serializer.is_valid():
+                    serializer.save()
+                else:
+                    diagnosis_errors.append(serializer.errors)
+
+            if diagnosis_errors:
+                return Response(
+                    {"diagnosis_errors": diagnosis_errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                diagnosis_data,
+                status=status.HTTP_201_CREATED,
+            )
+
+    except Exception as ex:
+        tb_str = traceback.format_exc()  # Formatear la traza del error
+        return Response(
+            {"error": str(ex), "traceback": tb_str},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def generateReport(request: Request):
+    try:
+        company_id = request.query_params.get("company")
+        company: Company = Company.objects.get(pk=company_id)
+
+        template_path = os.path.join(
+            settings.MEDIA_ROOT, "templates/DIAGNÓSTICO_BOLIVAR.docx"
+        )
+        doc = Document(template_path)
+        month, year = get_current_month_and_year()
+        variables_to_change = {
+            "{{CRONOGRAMA}}": "CRONOGRAMA AUTO",
+            "{{SECUENCIA}}": "SECUENCIA AUTO",
+            "{{COMPANY_NAME}}": company.name.upper(),
+            "{{NIT}}": format_nit(company.nit),
+            "{{MES_ANNO}}": f"{month.upper()} {year}",
+            "{{CONSULTOR_NOMBRE}}": f"{company.consultor.first_name.upper()} {company.consultor.last_name.upper()}",
+            "{{LICENCIA_SST}}": (
+                company.consultor.licensia_sst
+                if company.consultor.licensia_sst is not None
+                else "SIN LICENCIA"
+            ),
+            "{{TABLA_DIAGNOSTICO}}": "",
+        }
+
+        # Datos de la tabla
+        fecha = "01-01-2024"
+        empresa = company.name
+        nit = format_nit(company.nit)
+        actividades = "Ejemplo Actividades"
+        flotas = [
+            {"nombre": "Flota 1", "cant1": 5, "cant2": 10},
+            {"nombre": "Flota 2", "cant1": 7, "cant2": 15},
+        ]
+
+        insert_table_after_placeholder(
+            doc, "{{TABLA_DIAGNOSTICO}}", fecha, empresa, nit, actividades, flotas
+        )
+
+        replace_placeholders_in_document(doc, variables_to_change)
+
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        encoded_file = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        return Response({"file": encoded_file}, status=status.HTTP_200_OK)
+    except Exception as ex:
+        tb_str = traceback.format_exc()  # Formatear la traza del error
+        return Response(
+            {"error": str(ex), "traceback": tb_str},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

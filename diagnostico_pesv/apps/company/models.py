@@ -1,6 +1,7 @@
 from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
 from apps.sign.models import User
+from apps.arl.models import Arl
 
 
 class Dedication(SoftDeletes, Timestampable):
@@ -47,6 +48,7 @@ class Company(SoftDeletes, Timestampable):
         CompanySize, on_delete=models.SET_NULL, null=True, blank=True, default=None
     )
     diagnosis_step = models.IntegerField(null=False, default=0)
+    arl = models.ForeignKey(Arl, on_delete=models.SET_NULL, null=True, blank=False)
 
 
 class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico

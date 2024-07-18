@@ -11,6 +11,8 @@ from .models import (
 )
 from apps.sign.models import User
 from apps.sign.serializers import UserDetailSerializer
+from apps.arl.models import Arl
+from apps.arl.serializers import ArlSerializer
 
 
 class DedicationSerializer(serializers.ModelSerializer):
@@ -61,6 +63,10 @@ class CompanySerializer(serializers.ModelSerializer):
     company_size_detail = CompanySizeSerializer(
         source="company_size", required=False, read_only=True, allow_null=True
     )
+    arl = serializers.PrimaryKeyRelatedField(
+        queryset=Arl.objects.all(), write_only=True
+    )
+    arl_detail = ArlSerializer(source="arl", read_only=True)
 
     class Meta:
         model = Company
@@ -83,6 +89,8 @@ class CompanySerializer(serializers.ModelSerializer):
             "company_size",
             "company_size_detail",
             "diagnosis_step",
+            "arl",
+            "arl_detail",
         ]
 
     def validate(self, data):

@@ -28,6 +28,7 @@ urlpatterns = [
     path(f"{API_PREFIX}/sign/", include("apps.sign.urls")),
     path(f"{API_PREFIX}/companies/", include("apps.company.urls")),
     path(f"{API_PREFIX}/diagnosis/", include("apps.diagnosis.urls")),
+    path(f"{API_PREFIX}/arl/", include("apps.arl.urls")),
 ]
 # Con esta linea se puede acceder a los archivos media guardados en el servidor
 if settings.DEBUG:

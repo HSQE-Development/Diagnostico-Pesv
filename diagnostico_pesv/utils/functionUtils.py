@@ -41,7 +41,7 @@ def determine_company_size(dedication_id, total_vehicles, total_drivers):
         if (11 <= total_vehicles <= 19) or (2 <= total_drivers <= 19):
             return "BASICO"
         elif (20 <= total_vehicles <= 50) or (20 <= total_drivers <= 50):
-            return "INTERMEDIO"
+            return "ESTANDAR"
         elif total_vehicles > 50 or total_drivers > 50:
             return "AVANZADO"
         else:
@@ -52,7 +52,7 @@ def determine_company_size(dedication_id, total_vehicles, total_drivers):
         if (11 <= total_vehicles <= 49) or (2 <= total_drivers <= 49):
             return "BASICO"
         elif (50 <= total_vehicles <= 100) or (50 <= total_drivers <= 100):
-            return "INTERMEDIO"
+            return "ESTANDAR"
         elif total_vehicles > 100 or total_drivers > 100:
             return "AVANZADO"
         else:

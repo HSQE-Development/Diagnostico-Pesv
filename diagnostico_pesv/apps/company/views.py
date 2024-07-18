@@ -36,6 +36,7 @@ from apps.sign.permissions import IsSuperAdmin, IsConsultor, IsAdmin
 import logging
 from apps.sign.models import User
 from utils import functionUtils
+from apps.arl.models import Arl
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +50,16 @@ def findAll(request: Request):
     Consulta todos los datos segun el criterio del filter
     """
     try:
-        if IsSuperAdmin.has_permission(user=request.user) or IsAdmin.has_permission(
-            user=request.user
-        ):
-            companies = Company.objects_with_deleted
+        arlId = request.query_params.get("arlId")
+        if arlId is not None:
+            companies = Company.objects.filter(arl=arlId)
         else:
-            companies = Company.objects.filter(deleted_at=None)
+            if IsSuperAdmin.has_permission(user=request.user) or IsAdmin.has_permission(
+                user=request.user
+            ):
+                companies = Company.objects_with_deleted
+            else:
+                companies = Company.objects.all()
 
         serializer = CompanySerializer(companies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -414,10 +419,12 @@ def saveAnswerCuestions(request: Request):
             company_size_name = functionUtils.determine_company_size(
                 company.dedication.id, total_vehicles, total_drivers
             )
-
-            company_size = get_object_or_404(
-                CompanySize, name=company_size_name, dedication=company.dedication.id
+            # print(company_size_name)
+            company_size = CompanySize.objects.get(
+                name__iexact=functionUtils.eliminar_tildes(company_size_name),
+                dedication=company.dedication.id,
             )
+            print(company_size)
 
             # Guardar el tamaño de la organización en la instancia de Company
             company.company_size = company_size
@@ -455,8 +462,9 @@ def saveAnswerCuestions(request: Request):
                 company.dedication.id, total_vehicles, total_drivers
             )
 
-            company_size = get_object_or_404(
-                CompanySize, name=company_size_name, dedication=company.dedication.id
+            company_size = CompanySize.objects.get(
+                name__iexact=functionUtils.eliminar_tildes(company_size_name),
+                dedication=company.dedication.id,
             )
 
             # Guardar el tamaño de la organización en la instancia de Company
