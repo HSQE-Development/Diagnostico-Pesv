@@ -20,7 +20,14 @@ from io import BytesIO
 from apps.diagnosis_requirement.models import Diagnosis_Requirement
 from .models import Diagnosis_Questions, Diagnosis_Type, CheckList
 from .serializers import Diagnosis_QuestionsSerializer, CheckListSerializer
-from apps.company.models import Company
+from apps.company.models import (
+    Company,
+    VehicleQuestions,
+    DriverQuestion,
+    Fleet,
+    Driver,
+    Segments,
+)
 from utils.functionUtils import eliminar_tildes, blank_to_null
 from django.db import transaction
 from docx import Document
@@ -28,6 +35,8 @@ from io import BytesIO
 import os
 from django.conf import settings
 from .helper import *
+from django.db.models import Sum
+from django.db.models import Sum, F
 
 
 @api_view(["GET"])
@@ -232,15 +241,54 @@ def generateReport(request: Request):
     try:
         company_id = request.query_params.get("company")
         company: Company = Company.objects.get(pk=company_id)
+        vehicle_questions = VehicleQuestions.objects.all()
+        driver_questions = DriverQuestion.objects.all()
+        fleet_data = Fleet.objects.filter(company=company_id)
+        driver_data = Driver.objects.filter(company=company_id)
 
+        totals_vehicles = Fleet.objects.filter(company=company_id).aggregate(
+            total_owned=Sum("quantity_owned"),
+            total_third_party=Sum("quantity_third_party"),
+            total_arrended=Sum("quantity_arrended"),
+            total_contractors=Sum("quantity_contractors"),
+            total_intermediation=Sum("quantity_intermediation"),
+            total_leasing=Sum("quantity_leasing"),
+            total_renting=Sum("quantity_renting"),
+        )
+        total_quantity_driver = (
+            Driver.objects.filter(company=company_id).aggregate(
+                total_quantity=Sum("quantity")
+            )["total_quantity"]
+            or 0
+        )
+
+        # Extraer los valores y manejar casos en los que no haya registros
+        total_owned = totals_vehicles["total_owned"] or 0
+        total_third_party = totals_vehicles["total_third_party"] or 0
+        total_arrended = totals_vehicles["total_arrended"] or 0
+        total_contractors = totals_vehicles["total_contractors"] or 0
+        total_intermediation = totals_vehicles["total_intermediation"] or 0
+        total_leasing = totals_vehicles["total_leasing"] or 0
+        total_renting = totals_vehicles["total_renting"] or 0
+
+        # Calcular el total general sumando todos los totales parciales
+        total_general_vehicles = (
+            total_owned
+            + total_third_party
+            + total_arrended
+            + total_contractors
+            + total_intermediation
+            + total_leasing
+            + total_renting
+        )
         template_path = os.path.join(
             settings.MEDIA_ROOT, "templates/DIAGNÓSTICO_BOLIVAR.docx"
         )
         doc = Document(template_path)
         month, year = get_current_month_and_year()
         variables_to_change = {
-            "{{CRONOGRAMA}}": "CRONOGRAMA AUTO",
-            "{{SECUENCIA}}": "SECUENCIA AUTO",
+            "{{CRONOGRAMA}}": "#######",
+            "{{SECUENCIA}}": "########",
             "{{COMPANY_NAME}}": company.name.upper(),
             "{{NIT}}": format_nit(company.nit),
             "{{MES_ANNO}}": f"{month.upper()} {year}",
@@ -251,22 +299,89 @@ def generateReport(request: Request):
                 else "SIN LICENCIA"
             ),
             "{{TABLA_DIAGNOSTICO}}": "",
+            "{{PLANEAR_TABLE}}": "",
+            "{{HACER_TABLE}}": "",
+            "{{VERIFICAR_TABLE}}": "",
+            "{{ACTUAR_TABLE}}": "",
+            "{{MISIONALIDAD_ID}}": str(company.dedication.id),
+            "{{MISIONALIDAD_NAME}}": company.dedication.name.upper(),
+            "{{NIVEL_PESV}}": company.company_size.name.upper(),
+            "{{QUANTITY_VEHICLES}}": str(total_general_vehicles),
+            "{{QUANTITY_DRIVERS}}": str(total_quantity_driver),
+            "{{CONCLUSIONES_TABLE}}": "",
         }
 
         # Datos de la tabla
+
         fecha = "01-01-2024"
         empresa = company.name
         nit = format_nit(company.nit)
         actividades = "Ejemplo Actividades"
-        flotas = [
-            {"nombre": "Flota 1", "cant1": 5, "cant2": 10},
-            {"nombre": "Flota 2", "cant1": 7, "cant2": 15},
-        ]
 
         insert_table_after_placeholder(
-            doc, "{{TABLA_DIAGNOSTICO}}", fecha, empresa, nit, actividades, flotas
+            doc,
+            "{{TABLA_DIAGNOSTICO}}",
+            fecha,
+            empresa,
+            nit,
+            actividades,
+            vehicle_questions,
+            fleet_data,
+            driver_questions,
+            driver_data,
+            company.company_size.name.upper(),
+            str(company.segment.name),
+            f"{company.dependant} - {company.dependant_position}".upper(),
+            company.acquired_certification or "",
         )
+        checklist_data = CheckList.objects.filter(company=company_id)
+        size_name = eliminar_tildes(company.company_size.name)
+        diagnosis_type = Diagnosis_Type.objects.filter(name=size_name).first()
 
+        cycles = ["P", "H", "V", "A"]
+        for cycle in cycles:
+            diagnosis_questions = Diagnosis_Questions.objects.filter(
+                diagnosis_type=diagnosis_type, cycle__iexact=cycle
+            ).order_by("step")
+            grouped_questions = {}
+            for question in diagnosis_questions:
+                if question.step not in grouped_questions:
+                    grouped_questions[question.step] = {
+                        "step": question.step,
+                        "requirement_name": question.requirement.name,
+                        "questions": [],
+                    }
+                grouped_questions[question.step]["questions"].append(question)
+
+            # Define el placeholder para cada ciclo
+            placeholders = {
+                "P": "{{PLANEAR_TABLE}}",
+                "H": "{{HACER_TABLE}}",
+                "V": "{{VERIFICAR_TABLE}}",
+                "A": "{{ACTUAR_TABLE}}",
+            }
+            insert_table_results(
+                doc, placeholders[cycle], checklist_data, grouped_questions
+            )
+
+        diagnosis_questions = (
+            Diagnosis_Questions.objects.filter(
+                diagnosis_type=diagnosis_type, checklist__company_id=company_id
+            )
+            .values(
+                "cycle",
+                "step",
+                "requirement__name",
+            )
+            .annotate(
+                requirementName=F("requirement__name"),
+                companyName=F("checklist__company__name"),
+                sumatoria=Sum("checklist__obtained_value"),
+                variable=Sum("variable_value"),
+            )
+            .order_by("step")
+        )
+        insert_table_conclusion(doc, "{{CONCLUSIONES_TABLE}}", diagnosis_questions)
         replace_placeholders_in_document(doc, variables_to_change)
 
         buffer = BytesIO()
