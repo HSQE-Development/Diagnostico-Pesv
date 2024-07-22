@@ -35,8 +35,13 @@ from io import BytesIO
 import os
 from django.conf import settings
 from .helper import *
-from django.db.models import Sum
-from django.db.models import Sum, F
+from django.db.models import Sum, F, FloatField, ExpressionWrapper, Count
+import openpyxl
+from openpyxl.chart import BarChart, Reference
+from openpyxl.drawing.image import Image
+from PIL import Image as PILImage
+import matplotlib.pyplot as plt
+from collections import defaultdict
 
 
 @api_view(["GET"])
@@ -118,25 +123,12 @@ def uploadDiagnosisQuestions(request: Request):
 
     for idx, row in df.iterrows():
         try:
-            requisito_name = row["REQUISITO"]
-            requisito = Diagnosis_Requirement.objects.get(
-                name=str(requisito_name).strip()
-            )
+            requisito_name = row["PASO PESV"]
+            requisito = Diagnosis_Requirement.objects.get(step=requisito_name)
         except Diagnosis_Requirement.DoesNotExist:
             return Response(
                 {
                     "error": f"Requisito '{requisito_name}' not found at row {idx + 1}, column 'REQUISITO'"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            compliance_name = row["NIVEL"]
-            compliance = Diagnosis_Type.objects.get(name=compliance_name)
-        except Diagnosis_Type.DoesNotExist:
-            return Response(
-                {
-                    "error": f"Type '{compliance_name}' not found at row {idx + 1}, column 'NIVEL'"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -146,17 +138,13 @@ def uploadDiagnosisQuestions(request: Request):
             "step": row["PASO PESV"],
             "requirement": requisito.id,
             "name": str(row["CRITERIO DE VERIFICACIÓN"]).strip(),
-            "diagnosis_type": compliance.id,
             "variable_value": 50,
         }
 
         # Verificar si ya existe una entrada con los mismos valores
         existing_question = Diagnosis_Questions.objects.filter(
-            cycle=question_data["cycle"],
-            step=question_data["step"],
             requirement=question_data["requirement"],
             name=question_data["name"],
-            diagnosis_type=question_data["diagnosis_type"],
         ).first()
 
         if existing_question:
@@ -309,6 +297,8 @@ def generateReport(request: Request):
             "{{QUANTITY_VEHICLES}}": str(total_general_vehicles),
             "{{QUANTITY_DRIVERS}}": str(total_quantity_driver),
             "{{CONCLUSIONES_TABLE}}": "",
+            "{{TOTALS_TABLE}}": "",
+            "{{GRAPHIC_RADAR}}": "",
         }
 
         # Datos de la tabla
@@ -378,10 +368,155 @@ def generateReport(request: Request):
                 companyName=F("checklist__company__name"),
                 sumatoria=Sum("checklist__obtained_value"),
                 variable=Sum("variable_value"),
+                percentage=ExpressionWrapper(
+                    F("sumatoria") * 100.0 / F("variable"), output_field=FloatField()
+                ),
             )
             .order_by("step")
         )
         insert_table_conclusion(doc, "{{CONCLUSIONES_TABLE}}", diagnosis_questions)
+
+        # Agrupar por ciclo y calcular el porcentaje de cada fase
+        grouped_by_cycle = {}
+        sumatorias_by_cycle = {}
+        for item in diagnosis_questions:
+            cycle = item["cycle"].upper()
+            if cycle not in grouped_by_cycle:
+                grouped_by_cycle[cycle] = []
+                sumatorias_by_cycle[cycle] = {"sumatoria": 0, "variable": 0}
+            grouped_by_cycle[cycle].append(item)
+            sumatorias_by_cycle[cycle]["sumatoria"] += item["sumatoria"]
+            sumatorias_by_cycle[cycle]["variable"] += item["variable"]
+        # Calcular el porcentaje de cada fase
+        phase_percentages = []
+        for cycle, items in grouped_by_cycle.items():
+            total_sumatoria = sumatorias_by_cycle[cycle]["sumatoria"]
+            total_variable = sumatorias_by_cycle[cycle]["variable"]
+            phase_percentage = (
+                round((total_sumatoria / total_variable) * 100)
+                if total_variable > 0
+                else 0
+            )
+            phase_percentages.append(phase_percentage)
+
+        # Calcular el porcentaje general de las fases
+        num_fases = len(phase_percentages)
+        general_percentage = (
+            round(sum(phase_percentages) / num_fases, 2) if num_fases > 0 else 0
+        )
+        compliance_counts = (
+            CheckList.objects.filter(company=3)
+            .values("compliance_id")  # Agrupa por compliance_id
+            .annotate(
+                count=Count("id")
+            )  # Cuenta la cantidad de registros en cada grupo
+            .order_by("compliance_id")  # Ordena por compliance_id
+        )
+        insert_table_conclusion_percentage(
+            doc, "{{TOTALS_TABLE}}", compliance_counts, general_percentage
+        )
+        variables_to_change["{{TOTAL_PERCENTAGE}}"] = str(general_percentage)
+
+        compliance_level = "NINGUNO"
+        if general_percentage < 50:
+            compliance_level = "BAJO"
+        elif general_percentage >= 50 and general_percentage < 80:
+            compliance_level = "MEDIO"
+        elif general_percentage > 80:
+            compliance_level = "ALTO"
+
+        variables_to_change["{{COMPLIANCE_LEVEL}}"] = compliance_level
+        # Crear un archivo de Excel
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        # Agregar datos
+        diagnosis_questions_list = list(diagnosis_questions)
+        # Inicializa una lista para almacenar los datos
+        data = [["Paso PESV", "Porcentage"]]
+
+        # Recorre la lista y agrega cada step y su porcentaje a los datos
+        for item in diagnosis_questions_list:
+            step = item["step"]
+            percentage = item["percentage"]
+            data.append([step, percentage])
+
+        for row in data:
+            ws.append(row)
+
+        # Crear un gráfico
+        chart = BarChart()
+        chart.title = "NIVEL DEL CUMPLIMIENTO DEL PESV"
+        chart.x_axis.title = "Paso PESV"
+        chart.y_axis.title = "Porcentage"
+
+        data = Reference(ws, min_col=2, min_row=1, max_col=2, max_row=len(data))
+        categories = Reference(ws, min_col=1, min_row=2, max_row=len(data))
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(categories)
+
+        ws.add_chart(chart, "E5")
+
+        # Guardar el archivo de Excel con el gráfico
+        excel_file = "chart.xlsx"
+        wb.save(excel_file)
+
+        df = pd.read_excel(excel_file)
+        # Crear un gráfico con matplotlib
+        fig, ax = plt.subplots()
+        df.plot(kind="bar", x="Paso PESV", y="Porcentage", ax=ax)
+        ax.set_title("NIVEL DEL CUMPLIMIENTO DEL PESV")
+        ax.set_xlabel("Paso PESV")
+        ax.set_ylabel("Porcentage")
+        # Guardar el gráfico como una imagen
+        img_buffer = BytesIO()
+        plt.savefig(img_buffer, format="png")
+        img_buffer.seek(0)
+
+        # Guardar la imagen
+        image_file = "chart.png"
+        with open(image_file, "wb") as f:
+            f.write(img_buffer.getvalue())
+
+        labels = [
+            "Paso 1",
+            "Paso 1",
+            "Paso 2",
+            "Paso 3",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+            "Paso 4",
+        ]  # Reemplaza con las etiquetas correctas
+        values = [
+            item["percentage"] for item in diagnosis_questions
+        ]  # Asegúrate de tener los porcentajes
+
+        radar_chart_img_buffer = create_radar_chart(
+            values, labels, title="Nivel del Cumplimiento del PESV"
+        )
+        # Guarda el gráfico como archivo temporal
+        radar_chart_image_file = "radar_chart.png"
+        with open(radar_chart_image_file, "wb") as f:
+            f.write(radar_chart_img_buffer.getvalue())
+
+        insert_image_after_placeholder(doc, "{{GRAPHIC_BAR}}", image_file)
+        insert_image_after_placeholder(doc, "{{GRAPHIC_RADAR}}", radar_chart_image_file)
         replace_placeholders_in_document(doc, variables_to_change)
 
         buffer = BytesIO()

@@ -11,8 +11,6 @@ class Diagnosis_Type(SoftDeletes, Timestampable):
 # Create your views here.
 class Diagnosis_Questions(SoftDeletes, Timestampable):
     name = models.TextField(null=True, blank=False, default=None)
-    cycle = models.CharField(default=None, null=True, blank=False, max_length=2)
-    step = models.IntegerField(default=None, null=True, blank=False)
     requirement = models.ForeignKey(
         Diagnosis_Requirement,
         related_name="requirements",
@@ -21,9 +19,6 @@ class Diagnosis_Questions(SoftDeletes, Timestampable):
         blank=False,
     )
     variable_value = models.IntegerField(default=0, null=False, blank=False)
-    diagnosis_type = models.ForeignKey(
-        Diagnosis_Type, on_delete=models.SET_NULL, null=True, blank=False
-    )
 
 
 class Compliance(SoftDeletes, Timestampable):

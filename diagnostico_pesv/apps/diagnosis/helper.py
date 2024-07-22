@@ -7,6 +7,9 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from docx.table import _Cell
+import numpy as np
+import matplotlib.pyplot as plt
+from io import BytesIO
 
 
 def replace_text_in_paragraph(paragraph, search_text, replace_text):
@@ -418,7 +421,7 @@ def insert_table_results(
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
 
-def set_vertical_cell_direction(cell: _Cell, direction: str):
+def set_vertical_cell_direction(cell: _Cell, direction: str, align_center: bool = True):
     # direction: tbRl -- top to bottom, btLr -- bottom to top
     assert direction in ("tbRl", "btLr")
     tc = cell._tc
@@ -426,6 +429,11 @@ def set_vertical_cell_direction(cell: _Cell, direction: str):
     textDirection = OxmlElement("w:textDirection")
     textDirection.set(qn("w:val"), direction)  # btLr tbRl
     tcPr.append(textDirection)
+    # Configuración de la alineación vertical
+    if align_center:
+        vAlign = OxmlElement("w:vAlign")
+        vAlign.set(qn("w:val"), "center")
+        tcPr.append(vAlign)
 
 
 def merge_cells_vertically(cell):
@@ -461,53 +469,110 @@ def insert_table_conclusion(doc: Document, placeholder: str, diagnosis_questions
 
             # Agrupar datos por fase
             grouped_by_cycle = {}
+            sumatorias_by_cycle = {}
             for item in diagnosis_questions:
                 cycle = item["cycle"].upper()
                 if cycle not in grouped_by_cycle:
                     grouped_by_cycle[cycle] = []
+                    sumatorias_by_cycle[cycle] = {"sumatoria": 0, "variable": 0}
                 grouped_by_cycle[cycle].append(item)
-
-            # Recorrer y agregar filas para cada fase
+                sumatorias_by_cycle[cycle]["sumatoria"] += item["sumatoria"]
+                sumatorias_by_cycle[cycle]["variable"] += item["variable"]
+            # # Recorrer y agregar filas para cada fase
             for cycle, items in grouped_by_cycle.items():
-                phase_name = VALID_STEPS.get(cycle.upper(), "")
-
-                # Crear una fila por fase con la información de los items
-                phase_row = table.add_row().cells
-                phase_row[0].text = phase_name
-                set_vertical_cell_direction(phase_row[0], "tbRl")
-
-                for i in range(1, 8):
-                    phase_row[i].text = (
-                        ""  # Celdas vacías para rellenar con datos de items
-                    )
-
-                # Añadir filas para cada requerimiento en la fase
-                for item_index, item in enumerate(items):
-                    step = item["step"]
-                    requirement_name = item["requirementName"]
-                    obtained_value = item["sumatoria"]
-                    variable_value = item["variable"]
-
-                    # Calcular el puntaje obtenido
-                    percentage_step = (
-                        (obtained_value / variable_value * 100) if variable_value else 0
-                    )
-
-                    # Si no es la primera fila, agregar una nueva fila para el item
-                    if item_index > 0:
-                        phase_row = table.add_row().cells
-                        phase_cell = phase_row[0]
-                        phase_cell.text = (
-                            ""  # Celda de fase vacía para detalles de items
-                        )
-                        merge_cells_vertically(phase_cell)
-
-                    # Llenar la fila de datos
-                    phase_row[1].text = str(step)
-                    phase_row[2].text = requirement_name
-                    phase_row[2].merge(phase_row[5])
-                    phase_row[6].text = f"{percentage_step:.2f}%"
-                    phase_row[7].text = f"{percentage_step:.2f}%"
+                phase_name = VALID_STEPS.get(cycle.upper(), "Otros").upper()
+                total_sumatoria = sumatorias_by_cycle[cycle]["sumatoria"]
+                total_variable = sumatorias_by_cycle[cycle]["variable"]
+                phase_percentage = (
+                    round((total_sumatoria / total_variable) * 100)
+                    if total_variable > 0
+                    else 0
+                )
+                # Agregar el porcentaje de la fase a la lista
+                for i, requerimiento in enumerate(items):
+                    percentage = str(requerimiento["percentage"])
+                    cells = table.add_row().cells
+                    if i == 0:
+                        set_vertical_cell_direction(cells[0], "tbRl")
+                        cells[0].text = phase_name
+                        cells[7].text = f"{phase_percentage}%"
+                    cells[1].text = str(requerimiento["step"])
+                    cells[2].text = requerimiento["requirement__name"]
+                    cells[2].merge(cells[5])
+                    cells[6].text = f"{percentage}%"
+                start_idx = len(table.rows) - len(items)
+                end_idx = len(table.rows) - 1
+                for row_idx in range(start_idx, end_idx + 1):
+                    table.cell(row_idx, 0).merge(table.cell(end_idx, 0))
+                    table.cell(row_idx, 7).merge(table.cell(end_idx, 7))
 
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
+
+
+def insert_table_conclusion_percentage(
+    doc: Document, placeholder: str, counts, perecentaje
+):
+    for paragraph in doc.paragraphs:
+        if placeholder in paragraph.text:
+            index = paragraph._element.getparent().index(paragraph._element)
+            table = doc.add_table(rows=1, cols=5)
+            table.style = "Table Grid"
+            heading_row = table.rows[0].cells
+            heading_row[0].text = "TOTAL ITEMS"
+            heading_row[1].text = "CUMPLE"
+            heading_row[2].text = "NO CUMPLE"
+            heading_row[3].text = "CUMPLE PARCIALMENTE"
+            heading_row[4].text = "PORCENTJAE CUMPLIMIENTO"
+
+            total_items = counts[0]["count"] + counts[1]["count"] + counts[2]["count"]
+
+            title_row = table.add_row().cells
+            title_row[0].text = str(total_items)
+            title_row[1].text = str(counts[0]["count"])
+            title_row[2].text = str(counts[1]["count"])
+            title_row[3].text = str(counts[2]["count"])
+            title_row[4].text = f"{perecentaje}%"
+            table._element.getparent().insert(index + 1, table._element)
+            return  # Salir después de insertar la tabla para evitar múltiples inserciones
+
+
+def insert_image_after_placeholder(doc, placeholder, image_path):
+    # Iterar sobre todos los párrafos en el documento
+    for para in doc.paragraphs:
+        if placeholder in para.text:
+            # Crear un nuevo párrafo para la imagen
+            new_paragraph = para.insert_paragraph_before()
+            run = new_paragraph.add_run()
+            run.add_picture(image_path, width=Inches(5))
+            # Eliminar el párrafo original con el placeholder
+            para.clear()  # Eliminar el texto del párrafo pero mantener el párrafo
+            break
+
+
+def create_radar_chart(data, labels, title="Radar Chart"):
+    num_vars = len(labels)
+
+    # Asegúrate de que los datos cierren el gráfico
+    data += data[:1]
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+    angles += angles[:1]
+
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    ax.fill(angles, data, color="red", alpha=0.25)
+    ax.plot(angles, data, color="red", linewidth=2)
+
+    # Ajusta las etiquetas de los ejes
+    ax.set_yticklabels([])
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels)
+
+    ax.set_title(title, size=15, color="red", y=1.1)
+
+    # Guardar el gráfico en un buffer
+    img_buffer = BytesIO()
+    plt.savefig(img_buffer, format="png")
+    img_buffer.seek(0)
+    plt.close()
+
+    return img_buffer
