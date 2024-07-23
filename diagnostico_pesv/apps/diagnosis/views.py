@@ -134,7 +134,6 @@ def uploadDiagnosisQuestions(request: Request):
             )
 
         question_data = {
-            "cycle": row["CICLO"],
             "step": row["PASO PESV"],
             "requirement": requisito.id,
             "name": str(row["CRITERIO DE VERIFICACIÓN"]).strip(),
