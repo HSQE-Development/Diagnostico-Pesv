@@ -63,27 +63,25 @@ def determine_company_size(dedication_id, total_vehicles, total_drivers):
         raise ValueError(f"El valor de dedication_id={dedication_id} no es válido.")
 
 
-def calculate_total_vehicles_quantities_for_company(vehicle_data, company_id):
+def calculate_total_vehicles_quantities_for_company(vehicle_data):
     total_vehicles = 0
     for vehicle in vehicle_data:
-        if vehicle.get("company") == company_id:
-            total_vehicles += (
-                vehicle.get("quantity_owned", 0)
-                + vehicle.get("quantity_third_party", 0)
-                + vehicle.get("quantity_arrended", 0)
-                + vehicle.get("quantity_contractors", 0)
-                + vehicle.get("quantity_intermediation", 0)
-                + vehicle.get("quantity_leasing", 0)
-                + vehicle.get("quantity_renting", 0)
-            )
+        total_vehicles += (
+            vehicle.get("quantity_owned", 0)
+            + vehicle.get("quantity_third_party", 0)
+            + vehicle.get("quantity_arrended", 0)
+            + vehicle.get("quantity_contractors", 0)
+            + vehicle.get("quantity_intermediation", 0)
+            + vehicle.get("quantity_leasing", 0)
+            + vehicle.get("quantity_renting", 0)
+        )
     return total_vehicles
 
 
-def calculate_total_drivers_quantities_for_company(driver_data, company_id):
+def calculate_total_drivers_quantities_for_company(driver_data):
     total_drivers = 0
     for driver in driver_data:
-        if driver.get("company") == company_id:
-            total_drivers += driver.get("quantity", 0)
+        total_drivers += driver.get("quantity", 0)
     return total_drivers
 
 

@@ -5,4 +5,4 @@ from .models import *
 class Diagnosis_RequirementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Diagnosis_Requirement
-        fields = ["id", "name"]
+        fields = ["id", "name", "cycle", "step"]

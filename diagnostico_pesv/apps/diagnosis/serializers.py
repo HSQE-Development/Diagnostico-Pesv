@@ -25,25 +25,15 @@ class Diagnosis_QuestionsSerializer(serializers.ModelSerializer):
     requirement_detail = Diagnosis_RequirementSerializer(
         source="requirement", read_only=True
     )
-    diagnosis_type = serializers.PrimaryKeyRelatedField(
-        queryset=Diagnosis_Type.objects.all(), write_only=True
-    )
-    diagnosis_type_detail = Diagnosis_TypeSerializer(
-        source="diagnosis_type", read_only=True
-    )
 
     class Meta:
         model = Diagnosis_Questions
         fields = [
             "id",
             "name",
-            "cycle",
-            "step",
             "variable_value",
             "requirement",
             "requirement_detail",
-            "diagnosis_type",
-            "diagnosis_type_detail",
         ]
 
 

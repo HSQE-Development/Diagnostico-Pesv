@@ -4,24 +4,32 @@ from apps.sign.models import User
 from apps.arl.models import Arl
 
 
-class Dedication(SoftDeletes, Timestampable):
+class Mission(SoftDeletes, Timestampable):
     name = models.CharField(max_length=250, null=True, blank=True)
 
 
 class CompanySize(SoftDeletes, Timestampable):
-    dedication = models.ForeignKey(
-        Dedication, related_name="sizes", on_delete=models.CASCADE
-    )
     name = models.CharField(max_length=255)
-    description = models.TextField()
+
+
+class SizeCriteria(SoftDeletes, Timestampable):
+    name = models.TextField()
     vehicle_min = models.IntegerField(default=0, null=False)
     vehicle_max = models.IntegerField(
-        default=0, null=False, db_comment="El valor -1 representa sin Limite"
+        default=0, null=True, db_comment="El valor NULL representa sin Limite"
     )
     driver_min = models.IntegerField(default=0, null=False)
     driver_max = models.IntegerField(
-        default=0, null=False, db_comment="El valor -1 representa sin Limite"
+        default=0, null=True, db_comment="El valor NULL representa sin Limite"
     )
+
+
+class MisionalitySizeCriteria(SoftDeletes, Timestampable):
+    mission = models.ForeignKey(
+        Mission, related_name="misionalidad_criteria", on_delete=models.CASCADE
+    )
+    size = models.ForeignKey(CompanySize, on_delete=models.CASCADE)
+    criteria = models.ForeignKey(SizeCriteria, on_delete=models.CASCADE)
 
 
 class Segments(SoftDeletes, Timestampable):
@@ -43,12 +51,12 @@ class Company(SoftDeletes, Timestampable):
     consultor = models.OneToOneField(
         User, on_delete=models.SET_NULL, null=True, unique=True
     )
-    dedication = models.ForeignKey(Dedication, on_delete=models.CASCADE, null=True)
-    company_size = models.ForeignKey(
-        CompanySize, on_delete=models.SET_NULL, null=True, blank=True, default=None
-    )
+    mission = models.ForeignKey(Mission, on_delete=models.CASCADE, null=True)
     diagnosis_step = models.IntegerField(null=False, default=0)
     arl = models.ForeignKey(Arl, on_delete=models.SET_NULL, null=True, blank=False)
+    size = models.ForeignKey(
+        CompanySize, on_delete=models.SET_NULL, null=True, blank=False
+    )  # Añadido
 
 
 class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico

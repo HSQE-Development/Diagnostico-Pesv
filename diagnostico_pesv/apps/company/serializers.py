@@ -2,12 +2,14 @@ from rest_framework import serializers
 from .models import (
     Company,
     Segments,
-    Dedication,
+    Mission,
     CompanySize,
     VehicleQuestions,
     Driver,
     Fleet,
     DriverQuestion,
+    SizeCriteria,
+    MisionalitySizeCriteria,
 )
 from apps.sign.models import User
 from apps.sign.serializers import UserDetailSerializer
@@ -15,21 +17,58 @@ from apps.arl.models import Arl
 from apps.arl.serializers import ArlSerializer
 
 
-class DedicationSerializer(serializers.ModelSerializer):
+class MissionSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Dedication
+        model = Mission
         fields = ["id", "name"]
 
 
 class CompanySizeSerializer(serializers.ModelSerializer):
-    dedication = serializers.PrimaryKeyRelatedField(
-        queryset=Dedication.objects.all(), write_only=True
-    )
-    dedication_detail = DedicationSerializer(source="dedication", read_only=True)
-
     class Meta:
         model = CompanySize
-        fields = ["id", "name", "description", "dedication", "dedication_detail"]
+        fields = ["id", "name"]
+
+
+class SizeCriteriaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SizeCriteria
+        fields = [
+            "id",
+            "name",
+            "vehicle_min",
+            "vehicle_max",
+            "driver_min",
+            "driver_max",
+        ]
+
+
+class MisionalitySizeCriteriaSerializer(serializers.ModelSerializer):
+    mission = serializers.PrimaryKeyRelatedField(
+        queryset=Mission.objects.all(), write_only=True
+    )
+    mission_detail = MissionSerializer(source="mission", read_only=True)
+
+    size = serializers.PrimaryKeyRelatedField(
+        queryset=CompanySize.objects.all(), write_only=True
+    )
+    size_detail = CompanySizeSerializer(source="size", read_only=True)
+
+    criteria = serializers.PrimaryKeyRelatedField(
+        queryset=SizeCriteria.objects.all(), write_only=True
+    )
+    criteria_detail = SizeCriteriaSerializer(source="criteria", read_only=True)
+
+    class Meta:
+        model = MisionalitySizeCriteria
+        fields = [
+            "id",
+            "mission",
+            "mission_detail",
+            "size",
+            "size_detail",
+            "criteria",
+            "criteria_detail",
+        ]
 
 
 class SegmentSerializer(serializers.ModelSerializer):
@@ -49,24 +88,22 @@ class CompanySerializer(serializers.ModelSerializer):
     )
     consultor_detail = UserDetailSerializer(source="consultor", read_only=True)
 
-    dedication = serializers.PrimaryKeyRelatedField(
-        queryset=Dedication.objects.all(), write_only=True
+    mission = serializers.PrimaryKeyRelatedField(
+        queryset=Mission.objects.all(), write_only=True
     )
-    dedication_detail = DedicationSerializer(source="dedication", read_only=True)
-
-    company_size = serializers.PrimaryKeyRelatedField(
+    mission_detail = MissionSerializer(source="mission", read_only=True)
+    arl = serializers.PrimaryKeyRelatedField(
+        queryset=Arl.objects.all(), write_only=True
+    )
+    arl_detail = ArlSerializer(source="arl", read_only=True)
+    misionality_size_criteria = serializers.SerializerMethodField()
+    size = serializers.PrimaryKeyRelatedField(
         queryset=CompanySize.objects.all(),
         write_only=True,
         required=False,
         allow_null=True,
     )
-    company_size_detail = CompanySizeSerializer(
-        source="company_size", required=False, read_only=True, allow_null=True
-    )
-    arl = serializers.PrimaryKeyRelatedField(
-        queryset=Arl.objects.all(), write_only=True
-    )
-    arl_detail = ArlSerializer(source="arl", read_only=True)
+    size_detail = CompanySizeSerializer(source="size", read_only=True)
 
     class Meta:
         model = Company
@@ -84,20 +121,25 @@ class CompanySerializer(serializers.ModelSerializer):
             "diagnosis",
             "consultor",
             "consultor_detail",
-            "dedication",
-            "dedication_detail",
-            "company_size",
-            "company_size_detail",
+            "mission",
+            "mission_detail",
             "diagnosis_step",
             "arl",
             "arl_detail",
+            "misionality_size_criteria",
+            "size",
+            "size_detail",
         ]
 
-    def validate(self, data):
-        # Si 'company_size' puede ser null, entonces no es obligatorio
-        if "company_size" not in data:
-            data["company_size"] = None
-        return data
+    def get_misionality_size_criteria(self, obj):
+        # Get the related MisionalitySizeCriteria objects for this company
+        misionality_size_criteria = MisionalitySizeCriteria.objects.filter(
+            mission=obj.mission, size=obj.size
+        )
+        serializer = MisionalitySizeCriteriaSerializer(
+            misionality_size_criteria, many=True
+        )
+        return serializer.data
 
 
 class VehicleQuestionSerializer(serializers.ModelSerializer):

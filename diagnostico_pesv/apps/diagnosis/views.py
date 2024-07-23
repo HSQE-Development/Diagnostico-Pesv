@@ -42,6 +42,13 @@ from openpyxl.drawing.image import Image
 from PIL import Image as PILImage
 import matplotlib.pyplot as plt
 from collections import defaultdict
+from enum import Enum
+
+
+class CompanySizeEnum(Enum):
+    AVANZADO = 3
+    ESTANDAR = 2
+    BASICO = 1
 
 
 @api_view(["GET"])
@@ -49,56 +56,88 @@ from collections import defaultdict
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def findQuestionsByCompanySize(request: Request):
     try:
-        companId = request.query_params.get("company")
+        company_id = request.query_params.get("company")
         group_by_step = (
             request.query_params.get("group_by_step", "false").lower() == "true"
         )
-        company: Company = Company.objects.get(pk=companId)
-        size_name = eliminar_tildes(company.company_size.name)
-        diagnosis_type = Diagnosis_Type.objects.filter(name=size_name).first()
-        if group_by_step:
-            # Fetch and group questions by step including requirement.name
-            diagnosis_questions = Diagnosis_Questions.objects.filter(
-                diagnosis_type=diagnosis_type
-            ).order_by("step")
 
-            grouped_questions = {}
-            for question in diagnosis_questions:
-                if question.step not in grouped_questions:
-                    grouped_questions[question.step] = {
-                        "step": question.step,
-                        "requirement_name": question.requirement.name,
-                        "questions": [],
-                    }
-                grouped_questions[question.step]["questions"].append(question)
+        # Validar parámetro company_id
+        if not company_id:
+            return Response(
+                {"error": "El parámetro 'company' es requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-            grouped_questions_list = [
-                {
-                    "step": group_data["step"],
-                    "requirement_name": group_data["requirement_name"],
-                    "questions": Diagnosis_QuestionsSerializer(
-                        group_data["questions"], many=True, context={"request": request}
-                    ).data,
-                }
-                for group_data in grouped_questions.values()
-            ]
+        try:
+            company = Company.objects.get(pk=company_id)
+        except Company.DoesNotExist:
+            return Response(
+                {"error": "Empresa no encontrada."}, status=status.HTTP_404_NOT_FOUND
+            )
 
-            return Response(grouped_questions_list, status=status.HTTP_200_OK)
+        # Obtener requisitos de diagnóstico según el tamaño de la empresa
+        size_id = company.size.id
+        if size_id == CompanySizeEnum.BASICO.value:
+            diagnosis_requirements = Diagnosis_Requirement.objects.filter(basic=True)
+        elif size_id == CompanySizeEnum.ESTANDAR.value:
+            diagnosis_requirements = Diagnosis_Requirement.objects.filter(standard=True)
+        elif size_id == CompanySizeEnum.AVANZADO.value:
+            diagnosis_requirements = Diagnosis_Requirement.objects.filter(advanced=True)
         else:
+            return Response(
+                {"error": "Tamaño de empresa no válido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-            size_name = eliminar_tildes(company.company_size.name)
-            diagnosis_types = Diagnosis_Type.objects.filter(name=size_name).first()
-            diagnosisQuestions = Diagnosis_Questions.objects.filter(
-                diagnosis_type=diagnosis_types
-            ).order_by("step")
+        # Obtener preguntas de diagnóstico
+        diagnosis_questions = (
+            Diagnosis_Questions.objects.filter(requirement__in=diagnosis_requirements)
+            .select_related("requirement")
+            .order_by("requirement__step")
+        )
+
+        if group_by_step:
+            grouped_questions = group_questions_by_step(diagnosis_questions)
+            return Response(grouped_questions, status=status.HTTP_200_OK)
+        else:
             serialized_questions = Diagnosis_QuestionsSerializer(
-                diagnosisQuestions, many=True
+                diagnosis_questions, many=True
             )
             return Response(serialized_questions.data, status=status.HTTP_200_OK)
+
     except Exception as ex:
+        # logger.error(f"Error en findQuestionsByCompanySize: {str(ex)}")
         return Response(
-            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "Error interno del servidor."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+def group_questions_by_step(questions):
+    grouped_questions = {}
+    for question in questions:
+        step = question.requirement.step
+        if step not in grouped_questions:
+            grouped_questions[step] = {
+                "step": step,
+                "cycle": question.requirement.cycle,
+                "requirement_name": question.requirement.name,
+                "questions": [],
+            }
+        grouped_questions[step]["questions"].append(question)
+
+    grouped_questions_list = [
+        {
+            "step": group_data["step"],
+            "cycle": group_data["cycle"],
+            "requirement_name": group_data["requirement_name"],
+            "questions": Diagnosis_QuestionsSerializer(
+                group_data["questions"], many=True
+            ).data,
+        }
+        for group_data in grouped_questions.values()
+    ]
+    return grouped_questions_list
 
 
 @api_view(["POST"])
@@ -121,48 +160,48 @@ def uploadDiagnosisQuestions(request: Request):
 
     processed_data = []
 
-    for idx, row in df.iterrows():
-        try:
-            requisito_name = row["PASO PESV"]
-            requisito = Diagnosis_Requirement.objects.get(step=requisito_name)
-        except Diagnosis_Requirement.DoesNotExist:
-            return Response(
-                {
-                    "error": f"Requisito '{requisito_name}' not found at row {idx + 1}, column 'REQUISITO'"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    for paso in df["PASO PESV"].unique():
+        preguntas_por_paso = df[df["PASO PESV"] == paso]
+        num_preguntas_por_paso = preguntas_por_paso[
+            "CRITERIO DE VERIFICACIÓN"
+        ].nunique()
+        valor_pregunta = round(100 / num_preguntas_por_paso)
 
-        question_data = {
-            "step": row["PASO PESV"],
-            "requirement": requisito.id,
-            "name": str(row["CRITERIO DE VERIFICACIÓN"]).strip(),
-            "variable_value": 50,
-        }
-
-        # Verificar si ya existe una entrada con los mismos valores
-        existing_question = Diagnosis_Questions.objects.filter(
-            requirement=question_data["requirement"],
-            name=question_data["name"],
-        ).first()
-
-        if existing_question:
-            # Opcional: puedes actualizar el registro existente si es necesario
-            serializer = Diagnosis_QuestionsSerializer(
-                existing_question, data=question_data
-            )
-        else:
-            serializer = Diagnosis_QuestionsSerializer(data=question_data)
-
-        if serializer.is_valid():
-            serializer.save()
-            processed_data.append(serializer.data)
-        else:
-            errors = {
-                field: f"at row {idx + 1}, column '{field.upper()}' - {error}"
-                for field, error in serializer.errors.items()
+        for i, pregunta in preguntas_por_paso.iterrows():
+            nombre_pregunta = pregunta["CRITERIO DE VERIFICACIÓN"]
+            requisito = Diagnosis_Requirement.objects.get(step=paso)
+            resultado = {
+                "Requisito": requisito,
+                "Nombre_Pregunta": nombre_pregunta,
+                "Valor_Pregunta": valor_pregunta,
             }
-            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+            question_data = {
+                "requirement": resultado["Requisito"].id,
+                "name": str(resultado["Nombre_Pregunta"]).strip(),
+                "variable_value": resultado["Valor_Pregunta"],
+            }
+
+            try:
+                existing_question = Diagnosis_Questions.objects.get(
+                    requirement=resultado["Requisito"],
+                    name__iexact=resultado["Nombre_Pregunta"],
+                )
+                serializer = Diagnosis_QuestionsSerializer(
+                    existing_question, data=question_data
+                )
+            except Diagnosis_Questions.DoesNotExist:
+                serializer = Diagnosis_QuestionsSerializer(data=question_data)
+
+            if serializer.is_valid():
+                serializer.save()
+                processed_data.append(serializer.data)
+            else:
+                errors = {
+                    field: f"at row {i + 1}, column '{field.upper()}' - {error}"
+                    for field, error in serializer.errors.items()
+                }
+                return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
     return Response(processed_data, status=status.HTTP_201_CREATED)
 

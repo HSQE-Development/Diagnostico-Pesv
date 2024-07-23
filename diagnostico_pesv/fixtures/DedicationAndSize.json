@@ -1,6 +1,6 @@
 [
     {
-        "model": "company.Dedication",
+        "model": "company.Mission",
         "pk": "1",
         "fields": {
             "name": "PRESTACIÓN DEL SERVICIO DE TRANSPORTE TERRESTRE AUTOMOTOR",
@@ -9,7 +9,7 @@
         }
     },
     {
-        "model": "company.Dedication",
+        "model": "company.Mission",
         "pk": "2",
         "fields": {
             "name": "ACTIVIDAD DIFERENTE AL TRANSPORTE",
@@ -22,8 +22,6 @@
         "pk": "1",
         "fields": {
             "name": "BÁSICO",
-            "description": "Entre 11 y 19 vehículos o entre 2 y 19 conductores.",
-            "dedication": 1,
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
@@ -33,8 +31,6 @@
         "pk": "2",
         "fields": {
             "name": "ESTANDAR",
-            "description": "Entre 20 y 50 vehículos o entre 20 y 50 conductores.",
-            "dedication": 1,
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
@@ -44,41 +40,150 @@
         "pk": "3",
         "fields": {
             "name": "AVANZADO",
-            "description": "Más de 50 vehículos o más de 50 conductores.",
-            "dedication": 1,
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.CompanySize",
+        "model":"company.SizeCriteria",
+        "pk": "1",
+        "fields": {
+            "name":"Entre 11 y 19 vehículos o entre 2 y 19 conductores.",
+            "vehicle_min":11,
+            "vehicle_max":19,
+            "driver_min":2,
+            "driver_max":19,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.SizeCriteria",
+        "pk": "2",
+        "fields": {
+            "name":"Entre 20 y 50 vehículos o entre 20 y 50 conductores.",
+            "vehicle_min":20,
+            "vehicle_max":50,
+            "driver_min":20,
+            "driver_max":50,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.SizeCriteria",
+        "pk": "3",
+        "fields": {
+            "name":"Más de 50 vehículos o más de 50 conductores.",
+            "vehicle_min":50,
+            "vehicle_max":null,
+            "driver_min":50,
+            "driver_max":null,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.SizeCriteria",
         "pk": "4",
         "fields": {
-            "name": "BÁSICO",
-            "description": "Entre 11 y 49 vehículos o entre 2 y 49 conductores.",
-            "dedication": 2,
+            "name":"Entre 11 y 49 vehículos o entre 2 y 49 conductores.",
+            "vehicle_min":11,
+            "vehicle_max":49,
+            "driver_min":2,
+            "driver_max":49,
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.CompanySize",
+        "model":"company.SizeCriteria",
         "pk": "5",
         "fields": {
-            "name": "ESTANDAR",
-            "description": "Entre 50 y 100 vehículos o entre 50 y 100 conductores.",
-            "dedication": 2,
+            "name":"Entre 50 y 100 vehículos o entre 50 y 100 conductores.",
+            "vehicle_min":50,
+            "vehicle_max":100,
+            "driver_min":50,
+            "driver_max":100,
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.CompanySize",
+        "model":"company.SizeCriteria",
         "pk": "6",
         "fields": {
-            "name": "AVANZADO",
-            "description": "Más de 100 vehículos o más de 100 conductores.",
-            "dedication": 2,
+            "name":"Más de 100 vehículos o más de 100 conductores.",
+            "vehicle_min":100,
+            "vehicle_max":null,
+            "driver_min":100,
+            "driver_max":null,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.MisionalitySizeCriteria",
+        "pk": "1",
+        "fields": {
+            "mission":1,
+            "size":1,
+            "criteria":1,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.MisionalitySizeCriteria",
+        "pk": "2",
+        "fields": {
+            "mission":1,
+            "size":2,
+            "criteria":2,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.MisionalitySizeCriteria",
+        "pk": "3",
+        "fields": {
+            "mission":1,
+            "size":3,
+            "criteria":3,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.MisionalitySizeCriteria",
+        "pk": "4",
+        "fields": {
+            "mission":2,
+            "size":1,
+            "criteria":4,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.MisionalitySizeCriteria",
+        "pk": "5",
+        "fields": {
+            "mission":2,
+            "size":2,
+            "criteria":5,
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model":"company.MisionalitySizeCriteria",
+        "pk": "6",
+        "fields": {
+            "mission":2,
+            "size":3,
+            "criteria":6,
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
