@@ -319,9 +319,7 @@ def insert_table_after_placeholder(
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
 
-def insert_table_results(
-    doc: Document, placeholder: str, checklist_data, grouped_questions
-):
+def insert_table_results(doc: Document, placeholder: str, filtered_data):
     for paragraph in doc.paragraphs:
         if placeholder in paragraph.text:
             index = paragraph._element.getparent().index(paragraph._element)
@@ -369,54 +367,42 @@ def insert_table_results(
                         )
                     )
                 )  # Borde inferior negro
-
-            for step, data in grouped_questions.items():
-                step_row = table.add_row().cells
-                step_row[0].text = str(step)  # Paso
-                step_row[1].text = str(data["requirement_name"])
-                for cell in step_row:
-                    cell._element.get_or_add_tcPr().append(
-                        parse_xml(r'<w:shd {} w:fill="002C4F"/>'.format(nsdecls("w")))
-                    )  # Fondo gris suave
-                    cell._element.get_or_add_tcPr().append(
-                        parse_xml(
-                            r'<w:bdr {} w:bottom="1pt" w:space="0" w:val="single"/>'.format(
-                                nsdecls("w")
+            for data in filtered_data:
+                for steps in data["steps"]:
+                    print(steps)
+                    for requirement in steps["requirements"]:
+                        step_row = table.add_row().cells
+                        step_row[0].text = str(steps["step"])  # Paso
+                        step_row[1].text = str(requirement["requirement_name"])
+                        for cell in step_row:
+                            cell._element.get_or_add_tcPr().append(
+                                parse_xml(
+                                    r'<w:shd {} w:fill="002C4F"/>'.format(nsdecls("w"))
+                                )
                             )
-                        )
-                    )  # Borde inferior negro
-                step_row[1].merge(step_row[5])
-                step_row = table.add_row().cells
-                step_row[0].text = "Criterio de verificación"
-                step_row[0].merge(step_row[4])
-                step_row[5].text = "Nivel de Cumplimiento"
-                for cell in step_row:
-                    cell._element.get_or_add_tcPr().append(
-                        parse_xml(r'<w:shd {} w:fill="F5F5F5"/>'.format(nsdecls("w")))
-                    )  # Fondo gris claro
-
-                for question in data["questions"]:
-                    question_row = table.add_row().cells
-                    question_row[0].text = question.name
-                    question_row[0].merge(question_row[4])
-                    answer = next(
-                        (
-                            check
-                            for check in checklist_data
-                            if check.question.id == question.id
-                        ),
-                        None,
-                    )
-                    if answer:
-                        compliance_text = (
-                            answer.compliance.name.upper()
-                            if answer.compliance
-                            else "NO"
-                        )
-                    else:
-                        compliance_text = "NO"
-                    question_row[5].text = compliance_text
-
+                            cell._element.get_or_add_tcPr().append(
+                                parse_xml(
+                                    r'<w:bdr {} w:bottom="1pt" w:space="0" w:val="single"/>'.format(
+                                        nsdecls("w")
+                                    )
+                                )
+                            )
+                        step_row[1].merge(step_row[5])
+                        step_row = table.add_row().cells
+                        step_row[0].text = "Criterio de verificación"
+                        step_row[0].merge(step_row[4])
+                        step_row[5].text = "Nivel de Cumplimiento"
+                        for cell in step_row:
+                            cell._element.get_or_add_tcPr().append(
+                                parse_xml(
+                                    r'<w:shd {} w:fill="F5F5F5"/>'.format(nsdecls("w"))
+                                )
+                            )
+                        for question in requirement["questions"]:
+                            question_row = table.add_row().cells
+                            question_row[0].text = question["question_name"]
+                            question_row[0].merge(question_row[4])
+                            question_row[5].text = question["compliance"]
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 

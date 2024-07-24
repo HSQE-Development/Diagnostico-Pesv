@@ -35,6 +35,8 @@ class CheckList(SoftDeletes, Timestampable):
     compliance = models.ForeignKey(
         Compliance, on_delete=models.SET_NULL, null=True, blank=False
     )
-    obtained_value = models.IntegerField(default=0, null=False, blank=False)
+    # obtained_value = models.IntegerField(default=0, null=False, blank=False)
+    obtained_value = models.FloatField(default=0, null=False, blank=False)
     verify_document = models.TextField(null=True, default=None, blank=False)
     observation = models.TextField(null=False, default="SIN OBSERVACIONES", blank=False)
+    is_articuled = models.BooleanField(default=True)

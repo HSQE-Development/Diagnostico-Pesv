@@ -65,6 +65,7 @@ class CheckListSerializer(serializers.ModelSerializer):
             "compliance",
             "compliance_detail",
             "observation",
+            "is_articuled",
         ]
 
     def create(self, validated_data):
