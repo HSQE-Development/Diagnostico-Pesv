@@ -1,4 +1,5 @@
 import traceback
+import re
 from rest_framework.decorators import (
     api_view,
     authentication_classes,
@@ -13,7 +14,8 @@ from django.shortcuts import get_object_or_404
 import base64
 import pandas as pd
 from io import BytesIO
-from apps.diagnosis_requirement.models import Diagnosis_Requirement
+from apps.diagnosis_requirement.models import Diagnosis_Requirement, Recomendation
+from apps.diagnosis_requirement.serializers import Recomendation_Serializer
 from .models import Diagnosis_Questions, CheckList
 from .serializers import Diagnosis_QuestionsSerializer, CheckListSerializer
 from apps.company.models import (
@@ -30,7 +32,7 @@ from io import BytesIO
 import os
 from django.conf import settings
 from .helper import *
-from django.db.models import Sum, FloatField, Max, Avg
+from django.db.models import Sum, FloatField, Max, Avg, Count
 import openpyxl
 from openpyxl.chart import BarChart, Reference
 from openpyxl.drawing.image import Image
@@ -38,9 +40,10 @@ from PIL import Image as PILImage
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from enum import Enum
-from django.db.models import Prefetch, Value
+from django.db.models import Prefetch, Value, Case, CharField, When
 from django.db.models.functions import Coalesce
 from .services import DiagnosisService
+from django.core.exceptions import ObjectDoesNotExist
 
 
 class CompanySizeEnum(Enum):
@@ -338,6 +341,7 @@ def generateReport(request: Request):
             "{{CONCLUSIONES_TABLE}}": "",
             "{{TOTALS_TABLE}}": "",
             "{{GRAPHIC_RADAR}}": "",
+            "{{RECOMENDATIONS}}": "",
         }
 
         # Datos de la tabla
@@ -364,205 +368,90 @@ def generateReport(request: Request):
             f"{company.dependant} - {company.dependant_position}".upper(),
             company.acquired_certification or "",
         )
+
         datas_by_cycle = DiagnosisService.calculate_completion_percentage(company_id)
-        filter_cycle = "P"
-        filtered_data = [
-            cycle for cycle in datas_by_cycle if cycle["cycle"] == filter_cycle
+        filter_cycles = ["P", "H", "V", "A"]
+        placeholders = {
+            "P": "{{PLANEAR_TABLE}}",
+            "H": "{{HACER_TABLE}}",
+            "V": "{{VERIFICAR_TABLE}}",
+            "A": "{{ACTUAR_TABLE}}",
+        }
+
+        for f_cycle in filter_cycles:
+            filtered_data = [
+                cycle for cycle in datas_by_cycle if cycle["cycle"] == f_cycle
+            ]
+            insert_table_results(doc, placeholders[f_cycle], filtered_data)
+
+        insert_table_conclusion(doc, "{{CONCLUSIONES_TABLE}}", datas_by_cycle)
+
+        compliance_counts = (
+            CheckList.objects.filter(company=company_id)
+            .values("compliance_id")  # Agrupa por compliance_id
+            .annotate(
+                count=Count("id")
+            )  # Cuenta la cantidad de registros en cada grupo
+            .order_by("compliance_id")  # Ordena por compliance_id
+        )
+
+        # Inicializar variables para calcular el porcentaje general
+        total_percentage = 0.0
+        num_cycles = len(datas_by_cycle)
+        for cycle in datas_by_cycle:
+            total_percentage += round(cycle["cycle_percentage"], 2)
+        general_percentage = round((total_percentage / num_cycles), 2)
+        insert_table_conclusion_percentage(
+            doc, "{{TOTALS_TABLE}}", compliance_counts, general_percentage
+        )
+        variables_to_change["{{TOTAL_PERCENTAGE}}"] = str(general_percentage)
+
+        compliance_level = "NINGUNO"
+        if general_percentage < 50:
+            compliance_level = "BAJO"
+        elif general_percentage >= 50 and general_percentage < 80:
+            compliance_level = "MEDIO"
+        elif general_percentage > 80:
+            compliance_level = "ALTO"
+
+        variables_to_change["{{COMPLIANCE_LEVEL}}"] = compliance_level
+        # insert_image_after_placeholder(
+        #     doc, "{{GRAPHIC_BAR}}", create_bar_chart(datas_by_cycle)
+        # )
+        insert_image_after_placeholder(
+            doc, "{{GRAPHIC_RADAR }}", create_radar_chart(datas_by_cycle)
+        )
+        # Definir el orden deseado para los ciclos
+        orden_ciclos = ["P", "H", "V", "A"]
+        recomendaciones_agrupadas = (
+            Recomendation.objects.select_related("requirement")
+            .values("requirement__cycle", "name")
+            .annotate(
+                ciclo_order=Case(
+                    *[
+                        When(requirement__cycle=ciclo, then=Value(i))
+                        for i, ciclo in enumerate(orden_ciclos)
+                    ],
+                    output_field=CharField(),
+                )
+            )
+            .order_by("ciclo_order")
+        )
+
+        # Crear un diccionario para almacenar las recomendaciones agrupadas por cycle
+        recomendaciones_por_cycle = defaultdict(list)
+
+        for item in recomendaciones_agrupadas:
+            cycle = item["requirement__cycle"]
+            nombre_recomendacion = item["name"]
+            recomendaciones_por_cycle[cycle].append(nombre_recomendacion)
+
+        resultado_final = [
+            {"cycle": cycle, "recomendations": recomendaciones}
+            for cycle, recomendaciones in recomendaciones_por_cycle.items()
         ]
-        insert_table_results(doc, "{{PLANEAR_TABLE}}", filtered_data)
-        # checklist_data = CheckList.objects.filter(company=company_id)
-        # size_name = eliminar_tildes(company.company_size.name)
-        # diagnosis_type = Diagnosis_Type.objects.filter(name=size_name).first()
 
-        # cycles = ["P", "H", "V", "A"]
-        # for cycle in cycles:
-        #     diagnosis_questions = Diagnosis_Questions.objects.filter(
-        #         diagnosis_type=diagnosis_type, cycle__iexact=cycle
-        #     ).order_by("step")
-        #     grouped_questions = {}
-        #     for question in diagnosis_questions:
-        #         if question.step not in grouped_questions:
-        #             grouped_questions[question.step] = {
-        #                 "step": question.step,
-        #                 "requirement_name": question.requirement.name,
-        #                 "questions": [],
-        #             }
-        #         grouped_questions[question.step]["questions"].append(question)
-
-        #     # Define el placeholder para cada ciclo
-        #     placeholders = {
-        #         "P": "{{PLANEAR_TABLE}}",
-        #         "H": "{{HACER_TABLE}}",
-        #         "V": "{{VERIFICAR_TABLE}}",
-        #         "A": "{{ACTUAR_TABLE}}",
-        #     }
-        #     insert_table_results(
-        #         doc, placeholders[cycle], checklist_data, grouped_questions
-        #     )
-
-        # diagnosis_questions = (
-        #     Diagnosis_Questions.objects.filter(
-        #         diagnosis_type=diagnosis_type, checklist__company_id=company_id
-        #     )
-        #     .values(
-        #         "cycle",
-        #         "step",
-        #         "requirement__name",
-        #     )
-        #     .annotate(
-        #         requirementName=F("requirement__name"),
-        #         companyName=F("checklist__company__name"),
-        #         sumatoria=Sum("checklist__obtained_value"),
-        #         variable=Sum("variable_value"),
-        #         percentage=ExpressionWrapper(
-        #             F("sumatoria") * 100.0 / F("variable"), output_field=FloatField()
-        #         ),
-        #     )
-        #     .order_by("step")
-        # )
-        # insert_table_conclusion(doc, "{{CONCLUSIONES_TABLE}}", diagnosis_questions)
-
-        # # Agrupar por ciclo y calcular el porcentaje de cada fase
-        # grouped_by_cycle = {}
-        # sumatorias_by_cycle = {}
-        # for item in diagnosis_questions:
-        #     cycle = item["cycle"].upper()
-        #     if cycle not in grouped_by_cycle:
-        #         grouped_by_cycle[cycle] = []
-        #         sumatorias_by_cycle[cycle] = {"sumatoria": 0, "variable": 0}
-        #     grouped_by_cycle[cycle].append(item)
-        #     sumatorias_by_cycle[cycle]["sumatoria"] += item["sumatoria"]
-        #     sumatorias_by_cycle[cycle]["variable"] += item["variable"]
-        # # Calcular el porcentaje de cada fase
-        # phase_percentages = []
-        # for cycle, items in grouped_by_cycle.items():
-        #     total_sumatoria = sumatorias_by_cycle[cycle]["sumatoria"]
-        #     total_variable = sumatorias_by_cycle[cycle]["variable"]
-        #     phase_percentage = (
-        #         round((total_sumatoria / total_variable) * 100)
-        #         if total_variable > 0
-        #         else 0
-        #     )
-        #     phase_percentages.append(phase_percentage)
-
-        # # Calcular el porcentaje general de las fases
-        # num_fases = len(phase_percentages)
-        # general_percentage = (
-        #     round(sum(phase_percentages) / num_fases, 2) if num_fases > 0 else 0
-        # )
-        # compliance_counts = (
-        #     CheckList.objects.filter(company=3)
-        #     .values("compliance_id")  # Agrupa por compliance_id
-        #     .annotate(
-        #         count=Count("id")
-        #     )  # Cuenta la cantidad de registros en cada grupo
-        #     .order_by("compliance_id")  # Ordena por compliance_id
-        # )
-        # insert_table_conclusion_percentage(
-        #     doc, "{{TOTALS_TABLE}}", compliance_counts, general_percentage
-        # )
-        # variables_to_change["{{TOTAL_PERCENTAGE}}"] = str(general_percentage)
-
-        # compliance_level = "NINGUNO"
-        # if general_percentage < 50:
-        #     compliance_level = "BAJO"
-        # elif general_percentage >= 50 and general_percentage < 80:
-        #     compliance_level = "MEDIO"
-        # elif general_percentage > 80:
-        #     compliance_level = "ALTO"
-
-        # variables_to_change["{{COMPLIANCE_LEVEL}}"] = compliance_level
-        # # Crear un archivo de Excel
-        # wb = openpyxl.Workbook()
-        # ws = wb.active
-        # # Agregar datos
-        # diagnosis_questions_list = list(diagnosis_questions)
-        # # Inicializa una lista para almacenar los datos
-        # data = [["Paso PESV", "Porcentage"]]
-
-        # # Recorre la lista y agrega cada step y su porcentaje a los datos
-        # for item in diagnosis_questions_list:
-        #     step = item["step"]
-        #     percentage = item["percentage"]
-        #     data.append([step, percentage])
-
-        # for row in data:
-        #     ws.append(row)
-
-        # # Crear un gráfico
-        # chart = BarChart()
-        # chart.title = "NIVEL DEL CUMPLIMIENTO DEL PESV"
-        # chart.x_axis.title = "Paso PESV"
-        # chart.y_axis.title = "Porcentage"
-
-        # data = Reference(ws, min_col=2, min_row=1, max_col=2, max_row=len(data))
-        # categories = Reference(ws, min_col=1, min_row=2, max_row=len(data))
-        # chart.add_data(data, titles_from_data=True)
-        # chart.set_categories(categories)
-
-        # ws.add_chart(chart, "E5")
-
-        # # Guardar el archivo de Excel con el gráfico
-        # excel_file = "chart.xlsx"
-        # wb.save(excel_file)
-
-        # df = pd.read_excel(excel_file)
-        # # Crear un gráfico con matplotlib
-        # fig, ax = plt.subplots()
-        # df.plot(kind="bar", x="Paso PESV", y="Porcentage", ax=ax)
-        # ax.set_title("NIVEL DEL CUMPLIMIENTO DEL PESV")
-        # ax.set_xlabel("Paso PESV")
-        # ax.set_ylabel("Porcentage")
-        # # Guardar el gráfico como una imagen
-        # img_buffer = BytesIO()
-        # plt.savefig(img_buffer, format="png")
-        # img_buffer.seek(0)
-
-        # # Guardar la imagen
-        # image_file = "chart.png"
-        # with open(image_file, "wb") as f:
-        #     f.write(img_buffer.getvalue())
-
-        # labels = [
-        #     "Paso 1",
-        #     "Paso 1",
-        #     "Paso 2",
-        #     "Paso 3",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        #     "Paso 4",
-        # ]  # Reemplaza con las etiquetas correctas
-        # values = [
-        #     item["percentage"] for item in diagnosis_questions
-        # ]  # Asegúrate de tener los porcentajes
-
-        # radar_chart_img_buffer = create_radar_chart(
-        #     values, labels, title="Nivel del Cumplimiento del PESV"
-        # )
-        # # Guarda el gráfico como archivo temporal
-        # radar_chart_image_file = "radar_chart.png"
-        # with open(radar_chart_image_file, "wb") as f:
-        #     f.write(radar_chart_img_buffer.getvalue())
-
-        # insert_image_after_placeholder(doc, "{{GRAPHIC_BAR}}", image_file)
-        # insert_image_after_placeholder(doc, "{{GRAPHIC_RADAR}}", radar_chart_image_file)
+        insert_table_recomendations(doc, "{{RECOMENDATIONS}}", resultado_final)
         replace_placeholders_in_document(doc, variables_to_change)
 
         buffer = BytesIO()
@@ -577,3 +466,87 @@ def generateReport(request: Request):
             {"error": str(ex), "traceback": tb_str},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+@api_view(["POST"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def uploadsRecomendations(request: Request):
+    data = request.data.get("diagnosis_recomendations")
+    if not data:
+        return Response(
+            {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        # Decodificar el base64
+        decoded_file = base64.b64decode(data)
+        excel_file = BytesIO(decoded_file)
+
+        # Leer el archivo Excel y limpiar las filas con celdas vacías en la columna "RECOMENDACIÓN FRECUENTE"
+        df = pd.read_excel(excel_file)
+        df = df.dropna(subset=["RECOMENDACIÓN FRECUENTE"])
+
+        # Filtrar filas con valores NaN en la columna "PASO"
+        df = df[df["PASO"].notna()]
+
+        # Procesar recomendaciones por paso
+        recomendaciones_por_paso = {}
+        for index, row in df.iterrows():
+            paso = row["PASO"]
+            recomendacion = row["RECOMENDACIÓN FRECUENTE"]
+
+            # Extraer solo el texto principal eliminando viñetas y espacios en blanco al inicio y final
+            recomendacion_texto = str(recomendacion).strip()
+
+            # Verificar si la recomendación está vacía después de limpiar viñetas y espacios
+            if not recomendacion_texto:
+                continue
+
+            # Eliminar viñetas como asteriscos (*) al inicio del texto
+            if recomendacion_texto.startswith("·") or recomendacion_texto.startswith(
+                "*"
+            ):
+                recomendacion_texto = re.sub(
+                    r"^\s*[\*\-]\s*", "", recomendacion_texto
+                ).strip()
+
+            if paso not in recomendaciones_por_paso:
+                recomendaciones_por_paso[paso] = []
+            recomendaciones_por_paso[paso].append(recomendacion_texto)
+
+        # Procesar cada paso y almacenar las recomendaciones en la base de datos
+        processed_data = []
+        with transaction.atomic():
+            for paso, recomendaciones in recomendaciones_por_paso.items():
+                try:
+                    requisito = Diagnosis_Requirement.objects.get(step=paso)
+                except ObjectDoesNotExist:
+                    return Response(
+                        {
+                            "error": f"El requisito con paso '{paso}' no fue encontrado en la base de datos."
+                        },
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+                for recomendacion in recomendaciones:
+                    recomendation_data = {
+                        "requirement": requisito.id,
+                        "name": recomendacion,
+                    }
+                    serializer = Recomendation_Serializer(data=recomendation_data)
+
+                    if serializer.is_valid():
+                        serializer.save()
+                        processed_data.append(serializer.data)
+                    else:
+                        errors = {
+                            field: f"at row {index + 1}, column '{field.upper()}' - {error}"
+                            for field, error in serializer.errors.items()
+                        }
+                        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response(recomendaciones_por_paso, status=status.HTTP_201_CREATED)

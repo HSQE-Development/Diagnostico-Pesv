@@ -4,12 +4,17 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 from docx.oxml import OxmlElement
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.style import WD_STYLE
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from docx.table import _Cell
 import numpy as np
 import matplotlib.pyplot as plt
 from io import BytesIO
+import openpyxl
+from openpyxl.chart import BarChart, Reference
+from openpyxl.drawing.image import Image
+import pandas as pd
 
 
 def replace_text_in_paragraph(paragraph, search_text, replace_text):
@@ -341,14 +346,14 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
                     )  # Alineación
 
             # Quitar bordes de la tabla
-            tbl = table._tbl
-            tblPr = tbl.tblPr
-            tblBorders = OxmlElement("w:tblBorders")
-            for border_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
-                border = OxmlElement(f"w:{border_name}")
-                border.set(qn("w:val"), "none")
-                tblBorders.append(border)
-            tblPr.append(tblBorders)
+            # tbl = table._tbl
+            # tblPr = tbl.tblPr
+            # tblBorders = OxmlElement("w:tblBorders")
+            # for border_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
+            #     border = OxmlElement(f"w:{border_name}")
+            #     border.set(qn("w:val"), "none")
+            #     tblBorders.append(border)
+            # tblPr.append(tblBorders)
 
             # Estilo de la fila de encabezado
             heading_row = table.rows[0].cells
@@ -369,7 +374,7 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
                 )  # Borde inferior negro
             for data in filtered_data:
                 for steps in data["steps"]:
-                    print(steps)
+                    step_number = str(steps["step"])
                     for requirement in steps["requirements"]:
                         step_row = table.add_row().cells
                         step_row[0].text = str(steps["step"])  # Paso
@@ -398,11 +403,109 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
                                     r'<w:shd {} w:fill="F5F5F5"/>'.format(nsdecls("w"))
                                 )
                             )
+                        question_number = 1
                         for question in requirement["questions"]:
                             question_row = table.add_row().cells
-                            question_row[0].text = question["question_name"]
-                            question_row[0].merge(question_row[4])
+                            question_cell = question_row[0]
+                            para = question_cell.add_paragraph()
+                            # Run para la numeración en negrita
+                            run_number = para.add_run(
+                                f"{step_number}.{question_number} "
+                            )
+                            run_number.bold = True
+                            run_text = para.add_run(question["question_name"])
+                            question_cell.merge(question_row[4])
                             question_row[5].text = question["compliance"]
+                            for cell in question_row:
+                                # Crear un elemento de borde inferior
+                                bottom_border = OxmlElement("w:bottom")
+                                bottom_border.set(
+                                    "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val",
+                                    "single",
+                                )
+                                cell._element.get_or_add_tcPr().append(bottom_border)
+                            question_number += 1
+            table._element.getparent().insert(index + 1, table._element)
+            return  # Salir después de insertar la tabla para evitar múltiples inserciones
+
+
+def apply_bullets(paragraph):
+    """Aplica viñetas al párrafo usando XML."""
+    p = paragraph._element
+    pPr = p.get_or_add_pPr()
+    numPr = OxmlElement("w:numPr")
+    numId = OxmlElement("w:numId")
+    numId.set(qn("w:val"), "1")  # Utiliza el ID de numeración predeterminado
+    numPr.append(numId)
+    pPr.append(numPr)
+
+
+def insert_table_recomendations(
+    doc: Document, placeholder: str, recomendaciones_agrupadas
+):
+    VALID_STEPS = {
+        "P": "PLANEAR",
+        "H": "HACER",
+        "V": "VERIFICAR",
+        "A": "ACTUAR",
+    }
+    for paragraph in doc.paragraphs:
+        if placeholder in paragraph.text:
+            index = paragraph._element.getparent().index(paragraph._element)
+            table = doc.add_table(rows=1, cols=6)
+            table.style = "Table Grid"
+
+            # Estilo de la tabla
+            table.autofit = True
+            for row in table.rows:
+                for cell in row.cells:
+                    cell.text = ""
+                    cell.paragraphs[0].runs[0].font.size = Pt(10)  # Tamaño de fuente
+                    cell.paragraphs[0].runs[0].font.name = "Arial"  # Tipo de fuente
+                    cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(
+                        0, 0, 0
+                    )  # Color de texto
+                    cell.paragraphs[0].paragraph_format.alignment = (
+                        WD_ALIGN_PARAGRAPH.CENTER
+                    )  # Alineación
+
+            # Encabezado de la tabla
+            heading_row = table.rows[0].cells
+            heading_row[0].text = "CICLO PESV"
+            heading_row[0].merge(heading_row[5])
+            for cell in heading_row:
+                cell._element.get_or_add_tcPr().append(
+                    parse_xml(r'<w:shd {} w:fill="D3D3D3"/>'.format(nsdecls("w")))
+                )  # Fondo gris suave
+                cell._element.get_or_add_tcPr().append(
+                    parse_xml(
+                        r'<w:bdr {} w:bottom="1pt" w:space="0" w:val="single"/>'.format(
+                            nsdecls("w")
+                        )
+                    )
+                )  # Borde inferior negro
+
+            # Insertar datos por ciclo
+            for item in recomendaciones_agrupadas:
+                ciclo = VALID_STEPS.get(item["cycle"].upper(), "Otros").upper()
+                recomendaciones = item["recomendations"]
+                row = table.add_row().cells
+                row[0].text = ciclo
+                cell = row[1]
+                cell.paragraphs[0].clear()  # Limpiar cualquier texto existente
+
+                for recomendacion in recomendaciones:
+                    p = cell.add_paragraph(recomendacion)
+                    apply_bullets(p)
+                row[1].merge(row[5])
+                for cell in row:
+                    bottom_border = OxmlElement("w:bottom")
+                    bottom_border.set(
+                        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val",
+                        "single",
+                    )
+                    cell._element.get_or_add_tcPr().append(bottom_border)
+
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
@@ -427,7 +530,7 @@ def merge_cells_vertically(cell):
     cell._tc.get_or_add_tcPr().append(OxmlElement("w:vMerge"))
 
 
-def insert_table_conclusion(doc: Document, placeholder: str, diagnosis_questions):
+def insert_table_conclusion(doc: Document, placeholder: str, datas_by_cycle):
     for paragraph in doc.paragraphs:
         if placeholder in paragraph.text:
             index = paragraph._element.getparent().index(paragraph._element)
@@ -453,40 +556,24 @@ def insert_table_conclusion(doc: Document, placeholder: str, diagnosis_questions
                 "A": "ACTUAR",
             }
 
-            # Agrupar datos por fase
-            grouped_by_cycle = {}
-            sumatorias_by_cycle = {}
-            for item in diagnosis_questions:
-                cycle = item["cycle"].upper()
-                if cycle not in grouped_by_cycle:
-                    grouped_by_cycle[cycle] = []
-                    sumatorias_by_cycle[cycle] = {"sumatoria": 0, "variable": 0}
-                grouped_by_cycle[cycle].append(item)
-                sumatorias_by_cycle[cycle]["sumatoria"] += item["sumatoria"]
-                sumatorias_by_cycle[cycle]["variable"] += item["variable"]
             # # Recorrer y agregar filas para cada fase
-            for cycle, items in grouped_by_cycle.items():
-                phase_name = VALID_STEPS.get(cycle.upper(), "Otros").upper()
-                total_sumatoria = sumatorias_by_cycle[cycle]["sumatoria"]
-                total_variable = sumatorias_by_cycle[cycle]["variable"]
-                phase_percentage = (
-                    round((total_sumatoria / total_variable) * 100)
-                    if total_variable > 0
-                    else 0
-                )
-                # Agregar el porcentaje de la fase a la lista
-                for i, requerimiento in enumerate(items):
-                    percentage = str(requerimiento["percentage"])
+            for cycle in datas_by_cycle:
+                phase_name = VALID_STEPS.get(cycle["cycle"].upper(), "Otros").upper()
+                for i, requerimiento in enumerate(cycle["steps"]):
                     cells = table.add_row().cells
                     if i == 0:
+                        percentage = round(cycle["cycle_percentage"], 2)
                         set_vertical_cell_direction(cells[0], "tbRl")
                         cells[0].text = phase_name
-                        cells[7].text = f"{phase_percentage}%"
+                        cells[7].text = f"{percentage}%"
                     cells[1].text = str(requerimiento["step"])
-                    cells[2].text = requerimiento["requirement__name"]
-                    cells[2].merge(cells[5])
-                    cells[6].text = f"{percentage}%"
-                start_idx = len(table.rows) - len(items)
+                    for requirement in requerimiento["requirements"]:
+                        cells[2].text = str(requirement["requirement_name"])
+                        cells[2].merge(cells[5])
+                    req_percentage = round(requerimiento["percentage"], 2)
+                    cells[6].text = f"{req_percentage}%"
+
+                start_idx = len(table.rows) - len(cycle["steps"])
                 end_idx = len(table.rows) - 1
                 for row_idx in range(start_idx, end_idx + 1):
                     table.cell(row_idx, 0).merge(table.cell(end_idx, 0))
@@ -536,29 +623,77 @@ def insert_image_after_placeholder(doc, placeholder, image_path):
             break
 
 
-def create_radar_chart(data, labels, title="Radar Chart"):
+def create_radar_chart(datas_by_cycle):
+    labels = ["PLANEAR", "HACER", "ACTUAR", "VERIFICAR"]  # 5 categorías
+    stats = []  # Valores para cada categoría
+    for item in datas_by_cycle:
+        stats.append([round(item["cycle_percentage"], 2)])
+    # Número de categorías
     num_vars = len(labels)
 
-    # Asegúrate de que los datos cierren el gráfico
-    data += data[:1]
+    # Ángulos para cada categoría
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+
+    # Añadir el primer ángulo al final para cerrar el gráfico
+    stats += stats[:1]
     angles += angles[:1]
 
+    # Crear la gráfica de telaraña
     fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-    ax.fill(angles, data, color="red", alpha=0.25)
-    ax.plot(angles, data, color="red", linewidth=2)
+    ax.fill(angles, stats, color="blue", alpha=0.25)  # Rellenar el área bajo la curva
 
-    # Ajusta las etiquetas de los ejes
-    ax.set_yticklabels([])
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels)
+    # Configurar los límites radiales
+    ax.set_ylim(0, 100)
 
-    ax.set_title(title, size=15, color="red", y=1.1)
+    # Añadir etiquetas
+    ax.set_thetagrids(
+        np.degrees(angles[:-1]), labels
+    )  # Usar angles[:-1] para evitar duplicar la última etiqueta
 
-    # Guardar el gráfico en un buffer
+    # Guardar como imagen PNG
+    image_file = "telarana.png"
+    plt.savefig(image_file, bbox_inches="tight")
+
+    # Mostrar la gráfica (opcional, según se necesite)
+    # plt.show()
+
+    return image_file
+
+
+def create_bar_chart(datas_by_cycle):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    data = [["Paso PESV", "Porcentage"]]
+    for item in datas_by_cycle:
+        for steps in item["steps"]:
+            step = steps["step"]
+            percentage = steps["percentage"]
+            data.append([step, percentage])
+    for row in data:
+        ws.append(row)
+    chart = BarChart()
+    chart.title = "NIVEL DEL CUMPLIMIENTO DEL PESV"
+    chart.x_axis.title = "Paso PESV"
+    chart.y_axis.title = "Porcentage"
+    data = Reference(ws, min_col=2, min_row=1, max_col=2, max_row=len(data))
+    categories = Reference(ws, min_col=1, min_row=2, max_row=len(data))
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+    ws.add_chart(chart, "E5")
+    excel_file = "chart.xlsx"
+    wb.save(excel_file)
+
+    df = pd.read_excel(excel_file)
+    fig, ax = plt.subplots()
+    df.plot(kind="bar", x="Paso PESV", y="Porcentage", ax=ax)
+    ax.set_title("NIVEL DEL CUMPLIMIENTO DEL PESV")
+    ax.set_xlabel("Paso PESV")
+    ax.set_ylabel("Porcentage")
     img_buffer = BytesIO()
     plt.savefig(img_buffer, format="png")
     img_buffer.seek(0)
-    plt.close()
+    image_file = "chart.png"
+    with open(image_file, "wb") as f:
+        f.write(img_buffer.getvalue())
 
-    return img_buffer
+    return image_file

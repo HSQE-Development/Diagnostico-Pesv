@@ -4,6 +4,7 @@ from .views import (
     findQuestionsByCompanySize,
     saveDiagnosis,
     generateReport,
+    uploadsRecomendations,
 )
 
 urlpatterns = [
@@ -26,5 +27,10 @@ urlpatterns = [
         "generateReport",
         generateReport,
         name="generateReport",
+    ),
+    path(
+        "uploadsRecomendations",
+        uploadsRecomendations,
+        name="uploadsRecomendations",
     ),
 ]

@@ -29,7 +29,9 @@ class DiagnosisService:
 
         # Calcular porcentajes y estructurar datos
         for cycle, steps in checklists_by_cycle.items():
-            cycle_data = {"cycle": cycle, "steps": []}
+            cycle_data = {"cycle": cycle, "steps": [], "cycle_percentage": 0.0}
+            total_cycle_percentage = 0.0
+            num_steps = len(steps)
 
             for step, checklists in steps.items():
                 step_data = {"step": step, "requirements": [], "percentage": 0.0}
@@ -77,7 +79,10 @@ class DiagnosisService:
                 # Añadir requerimientos al paso
                 step_data["requirements"] = list(requirements_by_name.values())
                 cycle_data["steps"].append(step_data)
+                total_cycle_percentage += step_data["percentage"]
 
+            if num_steps > 0:
+                cycle_data["cycle_percentage"] = total_cycle_percentage / num_steps
             # Añadir el ciclo a la lista de resultados
             result.append(cycle_data)
 

@@ -11,3 +11,10 @@ class Diagnosis_Requirement(SoftDeletes, Timestampable):
     advanced = models.BooleanField(default=False, null=False, blank=False)
     step = models.IntegerField(default=None, null=True, blank=False)
     cycle = models.CharField(default=None, null=True, blank=False, max_length=2)
+
+
+class Recomendation(SoftDeletes, Timestampable):
+    name = models.TextField(null=True, blank=False)
+    requirement = models.ForeignKey(
+        Diagnosis_Requirement, on_delete=models.SET_NULL, null=True
+    )
