@@ -530,7 +530,9 @@ def merge_cells_vertically(cell):
     cell._tc.get_or_add_tcPr().append(OxmlElement("w:vMerge"))
 
 
-def insert_table_conclusion(doc: Document, placeholder: str, datas_by_cycle):
+def insert_table_conclusion(
+    doc: Document, placeholder: str, datas_by_cycle, sizeName: str
+):
     for paragraph in doc.paragraphs:
         if placeholder in paragraph.text:
             index = paragraph._element.getparent().index(paragraph._element)
@@ -538,7 +540,9 @@ def insert_table_conclusion(doc: Document, placeholder: str, datas_by_cycle):
             table.style = "Table Grid"
 
             heading_row = table.rows[0].cells
-            heading_row[0].text = "ESTRUCTURA DE PONDERACIÓN \n NIVEL AVANZADO - PESV"
+            heading_row[0].text = (
+                f"ESTRUCTURA DE PONDERACIÓN \n NIVEL {sizeName} - PESV"
+            )
             heading_row[0].merge(heading_row[7])
 
             title_row = table.add_row().cells
@@ -583,6 +587,47 @@ def insert_table_conclusion(doc: Document, placeholder: str, datas_by_cycle):
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
 
+def insert_table_conclusion_articulated(
+    doc: Document, placeholder: str, datas_by_cycle, sizeName: str
+):
+    for paragraph in doc.paragraphs:
+        if placeholder in paragraph.text:
+            index = paragraph._element.getparent().index(paragraph._element)
+            table = doc.add_table(rows=1, cols=8)
+            table.style = "Table Grid"
+            heading_row = table.rows[0].cells
+            heading_row[0].text = (
+                f"ESTRUCTURA DE PONDERACIÓN \n NIVEL {sizeName} - PESV - ARTICULACIONES"
+            )
+            heading_row[0].merge(heading_row[7])
+            title_row = table.add_row().cells
+            title_row[0].text = "FASE"
+            title_row[1].text = "PASO"
+            title_row[2].text = "DESCRIPCIÓN"
+            title_row[2].merge(title_row[5])
+            title_row[6].text = "NIVEL CUMPLIMIENTO"
+            title_row[6].merge(title_row[7])
+            for cycle_data in datas_by_cycle:
+                cycle = cycle_data["cycle"]
+                for step_data in cycle_data["steps"]:
+                    step = step_data["step"]
+                    for requirement_data in step_data["requirements"]:
+                        requirement_name = requirement_data["requirement_name"]
+                        # Obtener la última pregunta
+                        last_question = requirement_data["questions"][-1]
+                        last_question_name = last_question["question_name"]
+                        last_compliance = last_question["compliance"]
+
+                        row_cells = table.add_row().cells
+                        row_cells[0].text = cycle
+                        row_cells[1].text = str(step)
+                        row_cells[2].text = f"{requirement_name} - {last_question_name}"
+                        row_cells[2].merge(row_cells[5])
+                        row_cells[6].text = last_compliance
+            table._element.getparent().insert(index + 1, table._element)
+            return  # Salir después de insertar la tabla para evitar múltiples inserciones
+
+
 def insert_table_conclusion_percentage(
     doc: Document, placeholder: str, counts, perecentaje
 ):
@@ -596,15 +641,17 @@ def insert_table_conclusion_percentage(
             heading_row[1].text = "CUMPLE"
             heading_row[2].text = "NO CUMPLE"
             heading_row[3].text = "CUMPLE PARCIALMENTE"
+            heading_row[3].text = "NO APLICA"
             heading_row[4].text = "PORCENTJAE CUMPLIMIENTO"
 
             total_items = counts[0]["count"] + counts[1]["count"] + counts[2]["count"]
 
             title_row = table.add_row().cells
             title_row[0].text = str(total_items)
-            title_row[1].text = str(counts[0]["count"])
-            title_row[2].text = str(counts[1]["count"])
-            title_row[3].text = str(counts[2]["count"])
+            title_row[1].text = str(counts[0]["count"])  # Cumple
+            title_row[2].text = str(counts[1]["count"])  # No Cumple
+            title_row[3].text = str(counts[2]["count"])  # Cumple Parcialmente
+            title_row[3].text = str(counts[3]["count"])  # No Aplica
             title_row[4].text = f"{perecentaje}%"
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones

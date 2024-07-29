@@ -36,6 +36,11 @@ class Segments(SoftDeletes, Timestampable):
     name = models.CharField(max_length=100, unique=True, null=None)
 
 
+class Ciiu(SoftDeletes, Timestampable):
+    name = models.CharField(null=True, blank=False, max_length=250)
+    code = models.CharField(unique=True, null=True, blank=False, max_length=10)
+
+
 # Create your models here.
 class Company(SoftDeletes, Timestampable):
     name = models.CharField(max_length=100, unique=True, null=False)
@@ -44,7 +49,6 @@ class Company(SoftDeletes, Timestampable):
     dependant = models.CharField(max_length=200, null=True)
     dependant_position = models.CharField(max_length=200, null=True)
     dependant_phone = models.CharField(max_length=20, null=True)
-    activities_ciiu = models.CharField(max_length=255, null=True)
     email = models.CharField(max_length=200, null=True)
     acquired_certification = models.CharField(max_length=255, null=True)
     diagnosis = models.CharField(max_length=255, null=True)
@@ -57,6 +61,7 @@ class Company(SoftDeletes, Timestampable):
     size = models.ForeignKey(
         CompanySize, on_delete=models.SET_NULL, null=True, blank=False
     )  # Añadido
+    ciius = models.ManyToManyField(Ciiu, related_name="companies")
 
 
 class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico

@@ -1,5 +1,7 @@
-import traceback
-from django.shortcuts import render
+import base64
+import logging
+import csv
+from io import StringIO
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.request import Request
@@ -9,12 +11,12 @@ from .serializers import (
     CompanySerializer,
     SegmentSerializer,
     MissionSerializer,
-    CompanySizeSerializer,
     VehicleQuestionSerializer,
     DriverQuestionSerializer,
     DriverSerializer,
     FleetSerializer,
     MisionalitySizeCriteriaSerializer,
+    CiiuSerializer,
 )
 from .models import (
     Company,
@@ -26,18 +28,16 @@ from .models import (
     DriverQuestion,
     Driver,
     MisionalitySizeCriteria,
+    Ciiu,
 )
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
-from apps.sign.permissions import IsSuperAdmin, IsConsultor, IsAdmin
-import logging
-from apps.sign.models import User
+from apps.sign.permissions import IsSuperAdmin, IsAdmin
 from utils import functionUtils
-from apps.arl.models import Arl
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import ValidationError
 from http import HTTPMethod
 from .service import CompanyService
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,8 @@ class CompanyViewSet(viewsets.ModelViewSet):
         try:
             # Prepare data for validation and perform validation
             transformed_data = self.prepare_data(request.data)
+
+            # Deserialize and validate the data
             serializer = self.get_serializer(data=transformed_data)
             serializer.is_valid(raise_exception=True)
 
@@ -72,6 +74,19 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
             # Save the new Company instance
             self.perform_create(serializer)
+
+            # Get the created Company instance
+            company_instance = serializer.instance
+
+            # Handle the many-to-many relationships
+            ciuus_codes = transformed_data.get("ciius", [])
+            ciuus_ids = [int(identifier) for identifier in ciuus_codes]
+
+            # Find or create CIIU instances based on the provided codes
+            ciius = Ciiu.objects.filter(pk__in=ciuus_ids)
+
+            # Set the many-to-many relationship
+            company_instance.ciius.set(ciius)
             headers = self.get_success_headers(serializer.data)
 
             return Response(
@@ -246,6 +261,66 @@ class CompanyViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=False, methods=[HTTPMethod.POST])
+    def uploadCiiuCodes(self, request: Request):
+        data = request.data.get("ciiu_csv_base64")
+        if not data:
+            return Response(
+                {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+
+            try:
+                decoded_file = base64.b64decode(data)
+                csv_file = StringIO(decoded_file.decode("utf-8"))
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+            reader = csv.DictReader(csv_file, delimiter=";")
+            errors = []
+            processed_data = []
+            with transaction.atomic():
+                for row in reader:
+                    code = row.get("Codigo")
+                    description = row.get("Nombre")
+                    if Ciiu.objects.filter(code=code).exists():
+                        error = {"error": f"El codgio CIIU {code} ya existe"}
+                        errors.append(error)
+
+                    ciiu_data = {"code": code, "name": description}
+                    serializer = CiiuSerializer(data=ciiu_data)
+                    if serializer.is_valid():
+                        serializer.save()
+                        processed_data.append(serializer.data)
+                    else:
+                        error = {
+                            field: f"at code {code} - {error}"
+                            for field, error in serializer.errors.items()
+                        }
+                        errors.append(error)
+                        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(processed_data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False)
+    def findCiiuByCode(self, request: Request):
+        ciiu_code = request.query_params.get("ciiu_code", "")
+        try:
+            ciiu = None
+            if ciiu_code:
+                ciiu = Ciiu.objects.filter(code__icontains=ciiu_code)
+            else:
+                ciiu = Ciiu.objects.all()
+
+            serializer = CiiuSerializer(ciiu, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as ex:
+            return Response(
+                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=[HTTPMethod.POST])
     def saveAnswerCuestions(self, request: Request):
         try:
             company_id = request.data.get("company")
@@ -335,123 +410,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
             {"vehicleData": vehicle_data, "driverData": driver_data},
             status=status.HTTP_201_CREATED,
         )
-
-
-# @api_view(["POST"])
-# @authentication_classes([JWTAuthentication])
-# @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
-# def saveAnswerCuestions(request: Request):
-#     """Ester servicio se puede mejorar en logica y reutilizaion de codigo por favor cualquier idea sera bienvenida"""
-#     try:
-#         vehicle_data = request.data.get("vehicleData", [])
-#         driver_data = request.data.get("driverData", [])
-
-#         vehicle_errors = []
-#         driver_errors = []
-
-#         # Procesar y validar datos de vehículos
-#         for vehicle in vehicle_data:
-#             company_id = vehicle.get("company")
-
-#             company: Company = Company.objects.get(pk=company_id)
-# total_vehicles = (
-#     functionUtils.calculate_total_vehicles_quantities_for_company(
-#         vehicle_data, company_id
-#     )
-# )
-# total_drivers = (
-#     functionUtils.calculate_total_drivers_quantities_for_company(
-#         driver_data, company_id
-#     )
-# )
-
-#             company_size_name = functionUtils.determine_company_size(
-#                 company.dedication.id, total_vehicles, total_drivers
-#             )
-#             # print(company_size_name)
-#             company_size = CompanySize.objects.get(
-#                 name__iexact=functionUtils.eliminar_tildes(company_size_name),
-#                 dedication=company.dedication.id,
-#             )
-#             print(company_size)
-
-#             # Guardar el tamaño de la organización en la instancia de Company
-#             company.company_size = company_size
-#             company.diagnosis_step = 1
-#             company.save()
-
-#             # Procesar el vehículo
-#             fleet_instance = Fleet.objects.filter(
-#                 company=company_id, vehicle_question=vehicle.get("vehicle_question")
-#             ).first()
-
-#             serializer_fleet = FleetSerializer(instance=fleet_instance, data=vehicle)
-#             if serializer_fleet.is_valid():
-#                 serializer_fleet.save()
-#             else:
-#                 vehicle_errors.append(serializer_fleet.errors)
-
-#         # Procesar y validar datos de conductores
-#         for driver in driver_data:
-#             company_id = driver.get("company")
-
-#             company = get_object_or_404(Company, pk=company_id)
-# total_vehicles = (
-#     functionUtils.calculate_total_vehicles_quantities_for_company(
-#         vehicle_data, company_id
-#     )
-# )
-#             total_drivers = (
-#                 functionUtils.calculate_total_drivers_quantities_for_company(
-#                     driver_data, company_id
-#                 )
-#             )
-
-#             company_size_name = functionUtils.determine_company_size(
-#                 company.dedication.id, total_vehicles, total_drivers
-#             )
-
-#             company_size = CompanySize.objects.get(
-#                 name__iexact=functionUtils.eliminar_tildes(company_size_name),
-#                 dedication=company.dedication.id,
-#             )
-
-#             # Guardar el tamaño de la organización en la instancia de Company
-#             company.company_size = company_size
-#             company.diagnosis_step = 1
-#             company.save()
-
-#             # Procesar el conductor
-# driver_instance = Driver.objects.filter(
-#     company=company_id, driver_question=driver.get("driver_question")
-# ).first()
-
-#             serializer_driver = DriverSerializer(instance=driver_instance, data=driver)
-#             if serializer_driver.is_valid():
-#                 serializer_driver.save()
-#             else:
-#                 driver_errors.append(serializer_driver.errors)
-
-#         if vehicle_errors or driver_errors:
-#             return Response(
-#                 {"vehicleErrors": vehicle_errors, "driverErrors": driver_errors},
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-
-#         return Response(
-#             {
-#                 "vehicleData": vehicle_data,
-#                 "driverData": driver_data,
-#             },
-#             status=status.HTTP_201_CREATED,
-#         )
-
-#     except Exception as ex:
-#         tb_str = traceback.format_exc()  # Formatear la traza del error
-#         return Response(
-#             {"error": str(ex), "traceback": tb_str},
-#             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#         )
 
 
 # @api_view(["POST"])

@@ -13,7 +13,6 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 import base64
 import pandas as pd
-from io import BytesIO
 from apps.diagnosis_requirement.models import Diagnosis_Requirement, Recomendation
 from apps.diagnosis_requirement.serializers import Recomendation_Serializer
 from .models import Diagnosis_Questions, CheckList
@@ -339,9 +338,13 @@ def generateReport(request: Request):
             "{{QUANTITY_VEHICLES}}": str(total_general_vehicles),
             "{{QUANTITY_DRIVERS}}": str(total_quantity_driver),
             "{{CONCLUSIONES_TABLE}}": "",
+            "{{GRAPHIC_BAR}}": "",
             "{{TOTALS_TABLE}}": "",
             "{{GRAPHIC_RADAR}}": "",
             "{{RECOMENDATIONS}}": "",
+            "{{TOTAL_PERCENTAGE}}": "",
+            "{{ARTICULED_TABLE}}": "",
+            "{{TOTALS_ARTICULED}}": "",
         }
 
         # Datos de la tabla
@@ -384,8 +387,12 @@ def generateReport(request: Request):
             ]
             insert_table_results(doc, placeholders[f_cycle], filtered_data)
 
-        insert_table_conclusion(doc, "{{CONCLUSIONES_TABLE}}", datas_by_cycle)
-
+        insert_table_conclusion(
+            doc, "{{CONCLUSIONES_TABLE}}", datas_by_cycle, company.size.name.upper()
+        )
+        insert_table_conclusion_articulated(
+            doc, "{{ARTICULED_TABLE}}", datas_by_cycle, company.size.name.upper()
+        )
         compliance_counts = (
             CheckList.objects.filter(company=company_id)
             .values("compliance_id")  # Agrupa por compliance_id

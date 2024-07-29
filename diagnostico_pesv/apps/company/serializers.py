@@ -10,6 +10,7 @@ from .models import (
     DriverQuestion,
     SizeCriteria,
     MisionalitySizeCriteria,
+    Ciiu,
 )
 from apps.sign.models import User
 from apps.sign.serializers import UserDetailSerializer
@@ -77,6 +78,12 @@ class SegmentSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
+class CiiuSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ciiu
+        fields = ["id", "name", "code"]
+
+
 class CompanySerializer(serializers.ModelSerializer):
     segment = serializers.PrimaryKeyRelatedField(
         queryset=Segments.objects.all(), write_only=True
@@ -104,6 +111,10 @@ class CompanySerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     size_detail = CompanySizeSerializer(source="size", read_only=True)
+    ciius = serializers.PrimaryKeyRelatedField(
+        queryset=Ciiu.objects.all(), many=True, required=False
+    )
+    ciius_detail = CiiuSerializer(source="ciius", read_only=True, many=True)
 
     class Meta:
         model = Company
@@ -115,7 +126,6 @@ class CompanySerializer(serializers.ModelSerializer):
             "segment_detail",
             "dependant",
             "dependant_phone",
-            "activities_ciiu",
             "email",
             "acquired_certification",
             "diagnosis",
@@ -129,6 +139,8 @@ class CompanySerializer(serializers.ModelSerializer):
             "misionality_size_criteria",
             "size",
             "size_detail",
+            "ciius",
+            "ciius_detail",
         ]
 
     def get_misionality_size_criteria(self, obj):
