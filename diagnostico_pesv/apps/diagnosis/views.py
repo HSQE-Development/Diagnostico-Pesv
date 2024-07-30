@@ -342,7 +342,7 @@ def generateReport(request: Request):
             "{{TOTALS_TABLE}}": "",
             "{{GRAPHIC_RADAR}}": "",
             "{{RECOMENDATIONS}}": "",
-            "{{TOTAL_PERCENTAGE}}": "",
+            "{{PERCENTAGE_TOTAL}}": "",
             "{{ARTICULED_TABLE}}": "",
             "{{TOTALS_ARTICULED}}": "",
         }
@@ -393,6 +393,9 @@ def generateReport(request: Request):
         insert_table_conclusion_articulated(
             doc, "{{ARTICULED_TABLE}}", datas_by_cycle, company.size.name.upper()
         )
+        insert_table_conclusion_percentage_articuled(
+            doc, "{{TOTALS_ARTICULED}}", datas_by_cycle
+        )
         compliance_counts = (
             CheckList.objects.filter(company=company_id)
             .values("compliance_id")  # Agrupa por compliance_id
@@ -411,7 +414,6 @@ def generateReport(request: Request):
         insert_table_conclusion_percentage(
             doc, "{{TOTALS_TABLE}}", compliance_counts, general_percentage
         )
-        variables_to_change["{{TOTAL_PERCENTAGE}}"] = str(general_percentage)
 
         compliance_level = "NINGUNO"
         if general_percentage < 50:
@@ -458,6 +460,7 @@ def generateReport(request: Request):
             for cycle, recomendaciones in recomendaciones_por_cycle.items()
         ]
 
+        variables_to_change["{{PERCENTAGE_TOTAL}}"] = str(general_percentage)
         insert_table_recomendations(doc, "{{RECOMENDATIONS}}", resultado_final)
         replace_placeholders_in_document(doc, variables_to_change)
 

@@ -17,6 +17,164 @@ from openpyxl.drawing.image import Image
 import pandas as pd
 
 
+def align_cell_text(cell, horizontal="center", vertical="center"):
+    """
+    Aligns text in a cell both horizontally and vertically.
+
+    :param cell: The cell to align.
+    :param horizontal: Horizontal alignment ('left', 'center', 'right').
+    :param vertical: Vertical alignment ('top', 'center', 'bottom').
+    """
+    # Horizontal alignment
+    if horizontal == "left":
+        cell.paragraphs[0].alignment = 0  # Left-align
+    elif horizontal == "center":
+        cell.paragraphs[0].alignment = 1  # Center-align
+    elif horizontal == "right":
+        cell.paragraphs[0].alignment = 2  # Right-align
+
+    # Vertical alignment
+    cell_properties = cell._element.get_or_add_tcPr()
+
+    # Ensure the namespace is defined
+    cell_properties.set(qn("w:tcPr"), "")
+
+    v_align = cell_properties.find(qn("w:vAlign"))
+
+    if v_align is None:
+        v_align = OxmlElement("w:vAlign")
+        cell_properties.append(v_align)
+
+    if vertical == "top":
+        v_align.set(qn("w:val"), "top")
+    elif vertical == "center":
+        v_align.set(qn("w:val"), "center")
+    elif vertical == "bottom":
+        v_align.set(qn("w:val"), "bottom")
+
+
+def trim_merged_cell(cell):
+    """
+    Trims the text of a merged cell and clears the text in other merged cells.
+
+    :param cell: The cell to trim.
+    """
+    # Trim text in the current cell
+    cell.text = cell.text.strip()
+
+    # Find all cells in the merged range and clear their text
+    for row in cell._element.getparent().iterchildren():
+        for c in row.iterchildren():
+            if c is not cell._element and c.tag == qn("w:tc"):
+                c.text = ""
+
+
+def hex_to_rgb(hex_color):
+    """
+    Convert hexadecimal color to RGB tuple.
+
+    :param hex_color: Hexadecimal color string, e.g., 'FF0000'.
+    :return: Tuple (R, G, B).
+    """
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def rgb_to_hex(rgb_color):
+    """
+    Convert RGB tuple to hexadecimal color string.
+
+    :param rgb_color: Tuple (R, G, B).
+    :return: Hexadecimal color string, e.g., 'FF0000'.
+    """
+    return "".join(f"{c:02X}" for c in rgb_color).upper()
+
+
+def luminance(rgb_color):
+    """
+    Calculate the luminance of an RGB color to determine if it's dark or light.
+
+    :param rgb_color: Tuple (R, G, B).
+    :return: Luminance value.
+    """
+    r, g, b = [x / 255.0 for x in rgb_color]
+    # Apply the luminance formula
+    return 0.2126 * (r**2.2) + 0.7152 * (g**2.2) + 0.0722 * (b**2.2)
+
+
+def set_cell_background_color(cell, color):
+    """
+    Set the background color of a cell using either RGB or hexadecimal color values.
+    Automatically adjusts the text color based on the background color's luminance.
+
+    :param cell: The cell to modify.
+    :param color: RGB color value as a tuple, e.g., (255, 0, 0) for red,
+                  or a hexadecimal string, e.g., 'FF0000' for red.
+    """
+    # Check if the color is in RGB tuple format
+    if isinstance(color, tuple):
+        hex_color = rgb_to_hex(color)
+        rgb_color = color
+    elif isinstance(color, str):
+        hex_color = color.lstrip("#").upper()
+        rgb_color = hex_to_rgb(hex_color)
+    else:
+        raise ValueError("Color must be either an RGB tuple or a hexadecimal string")
+
+    # Ensure hex_color is 6 characters long
+    hex_color = hex_color.zfill(6)
+
+    # Define the XML namespace for background color
+    cell_properties = cell._element.get_or_add_tcPr()
+    shd = cell_properties.find(qn("w:shd"))
+
+    if shd is None:
+        shd = OxmlElement("w:shd")
+        cell_properties.append(shd)
+
+    # Set the fill color
+    shd.set(qn("w:fill"), hex_color)
+
+    # Determine text color based on background color's luminance
+    luminance_value = luminance(rgb_color)
+    text_color = RGBColor(255, 255, 255) if luminance_value < 0.5 else RGBColor(0, 0, 0)
+
+    # Apply text color
+    p = cell.paragraphs[0]
+    run = p.add_run()
+    run.font.color.rgb = text_color
+
+
+def set_cell_text_color(cell, color=None):
+    """
+    Set the text color of a cell. If no color is specified, the default is white.
+
+    :param cell: The cell to modify.
+    :param color: RGB color value as a tuple, e.g., (255, 0, 0) for red,
+                  or a hexadecimal string, e.g., 'FF0000' for red.
+                  If None, sets the text color to white.
+    """
+    # Default to white color if no color is specified
+    if color is None:
+        color = (255, 255, 255)  # White
+
+    # Check if the color is in hexadecimal format or RGB tuple
+    if isinstance(color, str):
+        rgb_color = hex_to_rgb(color)
+    elif isinstance(color, tuple):
+        rgb_color = color
+    else:
+        raise ValueError("Color must be either an RGB tuple or a hexadecimal string")
+
+    # Create an RGBColor object
+    text_color = RGBColor(*rgb_color)
+
+    # Apply the color to all runs in the cell
+    for paragraph in cell.paragraphs:
+        for run in paragraph.runs:
+            run.font.color.rgb = text_color
+
+
 def replace_text_in_paragraph(paragraph, search_text, replace_text):
     if search_text in paragraph.text:
         inline = paragraph.runs
@@ -168,7 +326,10 @@ def insert_table_after_placeholder(
             row_cells[6].merge(row_cells[7])
             row_cells[8].text = empresa
             row_cells[8].merge(row_cells[11])
-
+            for cell in row_cells:
+                align_cell_text(cell, "left")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
             # Agregar fila con NIT y actividades
             row_cells = table.add_row().cells
             row_cells[0].text = "Nit"
@@ -179,7 +340,10 @@ def insert_table_after_placeholder(
             row_cells[6].merge(row_cells[7])
             row_cells[8].text = actividades
             row_cells[8].merge(row_cells[11])
-
+            for cell in row_cells:
+                align_cell_text(cell, "left")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
             # Agregar fila con NIT y actividades
             row_cells = table.add_row().cells
             row_cells[0].text = "Tamaño de la empresa"
@@ -190,7 +354,10 @@ def insert_table_after_placeholder(
             row_cells[6].merge(row_cells[7])
             row_cells[8].text = segment
             row_cells[8].merge(row_cells[11])
-
+            for cell in row_cells:
+                align_cell_text(cell, "left")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
             # Agregar fila con NIT y actividades
             row_cells = table.add_row().cells
             row_cells[0].text = "Contacto"
@@ -202,10 +369,18 @@ def insert_table_after_placeholder(
             row_cells[8].text = certification or "NINGUNA"
             row_cells[8].merge(row_cells[11])
 
+            for cell in row_cells:
+                align_cell_text(cell, "left")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
+
             # Agregar fila para Flota de vehículos
             flota_header_row = table.add_row().cells
             flota_header_row[0].text = "Flota de vehículos"
             flota_header_row[0].merge(flota_header_row[11])
+            align_cell_text(flota_header_row[0], "left")
+            set_cell_background_color(flota_header_row[0], "2f4858")
+            set_cell_text_color(flota_header_row[0])
 
             flota_rows_row = table.add_row().cells
             flota_rows_row[0].text = "FLOTA DE VEHICULOS AUTOMOTORES"
@@ -217,6 +392,10 @@ def insert_table_after_placeholder(
             flota_rows_row[9].text = "Cantidad Intermediación"
             flota_rows_row[10].text = "Cantidad Leasing"
             flota_rows_row[11].text = "Cantidad Renting"
+            for cell in flota_rows_row:
+                align_cell_text(cell, "left")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
 
             # Variables para almacenar los totales
             total_propio = 0
@@ -232,6 +411,9 @@ def insert_table_after_placeholder(
                 row_cells = table.add_row().cells
                 row_cells[0].text = vehicle_question.name
                 row_cells[0].merge(row_cells[4])
+                align_cell_text(row_cells[0], "left")
+                set_cell_background_color(row_cells[0], "2f4858")
+                set_cell_text_color(row_cells[0])
                 fleet = next(
                     (
                         f
@@ -255,6 +437,8 @@ def insert_table_after_placeholder(
                 row_cells[9].text = str(quantity_intermediacion)
                 row_cells[10].text = str(quantity_leasing)
                 row_cells[11].text = str(quantity_renting)
+                for cell in row_cells:
+                    align_cell_text(cell)
 
                 # Sumar cantidades a los totales
                 total_propio += quantity_propio
@@ -279,6 +463,9 @@ def insert_table_after_placeholder(
             total_row = table.add_row().cells
             total_row[0].text = "Total Vehiculos".upper()
             total_row[0].merge(total_row[4])
+            align_cell_text(total_row[0], "left")
+            set_cell_background_color(total_row[0], "2f4858")
+            set_cell_text_color(total_row[0])
             total_row[5].text = str(total)
             total_row[5].merge(total_row[6])
             total_row[5].merge(total_row[7])
@@ -295,12 +482,19 @@ def insert_table_after_placeholder(
             driver_header_row[0].merge(driver_header_row[8])
             driver_header_row[9].text = "Cantidad"
             driver_header_row[9].merge(driver_header_row[11])
+            for cell in driver_header_row:
+                align_cell_text(cell, "left")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
             total_conductores = 0
             # Datos de conductores
             for driver_question in driver_questions:
                 driver_data_row = table.add_row().cells
                 driver_data_row[0].text = driver_question.name
                 driver_data_row[0].merge(driver_data_row[8])
+                align_cell_text(driver_data_row[0], "left")
+                set_cell_background_color(driver_data_row[0], "2f4858")
+                set_cell_text_color(driver_data_row[0])
                 driver = next(
                     (
                         f
@@ -312,11 +506,16 @@ def insert_table_after_placeholder(
                 quantity = driver.quantity if driver else 0
                 driver_data_row[9].text = str(quantity)
                 driver_data_row[9].merge(driver_data_row[11])
+                for cell in driver_data_row:
+                    align_cell_text(cell)
                 total_conductores += quantity
             # Agregar fila con los totales
             total_driver_row = table.add_row().cells
             total_driver_row[0].text = "Total Conductores".upper()
             total_driver_row[0].merge(total_driver_row[8])
+            align_cell_text(total_driver_row[0], "left")
+            set_cell_background_color(total_driver_row[0], "2f4858")
+            set_cell_text_color(total_driver_row[0])
             total_driver_row[9].text = str(total_conductores)
             total_driver_row[9].merge(total_driver_row[11])
             # Mover la tabla a la posición deseada
@@ -333,27 +532,6 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
 
             # Estilo de la tabla
             table.autofit = True
-            for row in table.rows:
-                for cell in row.cells:
-                    cell.text = ""
-                    cell.paragraphs[0].runs[0].font.size = Pt(10)  # Tamaño de fuente
-                    cell.paragraphs[0].runs[0].font.name = "Arial"  # Tipo de fuente
-                    cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(
-                        0, 0, 0
-                    )  # Color de texto
-                    cell.paragraphs[0].paragraph_format.alignment = (
-                        WD_ALIGN_PARAGRAPH.CENTER
-                    )  # Alineación
-
-            # Quitar bordes de la tabla
-            # tbl = table._tbl
-            # tblPr = tbl.tblPr
-            # tblBorders = OxmlElement("w:tblBorders")
-            # for border_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
-            #     border = OxmlElement(f"w:{border_name}")
-            #     border.set(qn("w:val"), "none")
-            #     tblBorders.append(border)
-            # tblPr.append(tblBorders)
 
             # Estilo de la fila de encabezado
             heading_row = table.rows[0].cells
@@ -362,16 +540,8 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
             heading_row[1].merge(heading_row[5])
 
             for cell in heading_row:
-                cell._element.get_or_add_tcPr().append(
-                    parse_xml(r'<w:shd {} w:fill="D3D3D3"/>'.format(nsdecls("w")))
-                )  # Fondo gris suave
-                cell._element.get_or_add_tcPr().append(
-                    parse_xml(
-                        r'<w:bdr {} w:bottom="1pt" w:space="0" w:val="single"/>'.format(
-                            nsdecls("w")
-                        )
-                    )
-                )  # Borde inferior negro
+                align_cell_text(cell, "left", "center")
+
             for data in filtered_data:
                 for steps in data["steps"]:
                     step_number = str(steps["step"])
@@ -379,30 +549,18 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
                         step_row = table.add_row().cells
                         step_row[0].text = str(steps["step"])  # Paso
                         step_row[1].text = str(requirement["requirement_name"])
-                        for cell in step_row:
-                            cell._element.get_or_add_tcPr().append(
-                                parse_xml(
-                                    r'<w:shd {} w:fill="002C4F"/>'.format(nsdecls("w"))
-                                )
-                            )
-                            cell._element.get_or_add_tcPr().append(
-                                parse_xml(
-                                    r'<w:bdr {} w:bottom="1pt" w:space="0" w:val="single"/>'.format(
-                                        nsdecls("w")
-                                    )
-                                )
-                            )
+
                         step_row[1].merge(step_row[5])
+                        for cell in step_row:
+                            set_cell_background_color(cell, "2f4858")
+                            set_cell_text_color(cell)
                         step_row = table.add_row().cells
                         step_row[0].text = "Criterio de verificación"
                         step_row[0].merge(step_row[4])
                         step_row[5].text = "Nivel de Cumplimiento"
                         for cell in step_row:
-                            cell._element.get_or_add_tcPr().append(
-                                parse_xml(
-                                    r'<w:shd {} w:fill="F5F5F5"/>'.format(nsdecls("w"))
-                                )
-                            )
+                            align_cell_text(cell, "left")
+                            set_cell_background_color(cell, "ebedf3")
                         question_number = 1
                         for question in requirement["questions"]:
                             question_row = table.add_row().cells
@@ -413,17 +571,11 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
                                 f"{step_number}.{question_number} "
                             )
                             run_number.bold = True
-                            run_text = para.add_run(question["question_name"])
+                            para.add_run(question["question_name"])
                             question_cell.merge(question_row[4])
+                            align_cell_text(question_cell, "left")
                             question_row[5].text = question["compliance"]
-                            for cell in question_row:
-                                # Crear un elemento de borde inferior
-                                bottom_border = OxmlElement("w:bottom")
-                                bottom_border.set(
-                                    "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val",
-                                    "single",
-                                )
-                                cell._element.get_or_add_tcPr().append(bottom_border)
+                            align_cell_text(question_row[5])
                             question_number += 1
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
@@ -457,33 +609,10 @@ def insert_table_recomendations(
 
             # Estilo de la tabla
             table.autofit = True
-            for row in table.rows:
-                for cell in row.cells:
-                    cell.text = ""
-                    cell.paragraphs[0].runs[0].font.size = Pt(10)  # Tamaño de fuente
-                    cell.paragraphs[0].runs[0].font.name = "Arial"  # Tipo de fuente
-                    cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(
-                        0, 0, 0
-                    )  # Color de texto
-                    cell.paragraphs[0].paragraph_format.alignment = (
-                        WD_ALIGN_PARAGRAPH.CENTER
-                    )  # Alineación
-
             # Encabezado de la tabla
             heading_row = table.rows[0].cells
             heading_row[0].text = "CICLO PESV"
             heading_row[0].merge(heading_row[5])
-            for cell in heading_row:
-                cell._element.get_or_add_tcPr().append(
-                    parse_xml(r'<w:shd {} w:fill="D3D3D3"/>'.format(nsdecls("w")))
-                )  # Fondo gris suave
-                cell._element.get_or_add_tcPr().append(
-                    parse_xml(
-                        r'<w:bdr {} w:bottom="1pt" w:space="0" w:val="single"/>'.format(
-                            nsdecls("w")
-                        )
-                    )
-                )  # Borde inferior negro
 
             # Insertar datos por ciclo
             for item in recomendaciones_agrupadas:
@@ -491,13 +620,26 @@ def insert_table_recomendations(
                 recomendaciones = item["recomendations"]
                 row = table.add_row().cells
                 row[0].text = ciclo
-                cell = row[1]
+                row[0].merge(row[5])
+                align_cell_text(row[0])
+                if item["cycle"].upper() == "P":
+                    set_cell_background_color(row[0], "0066B2")
+                elif item["cycle"].upper() == "H":
+                    set_cell_background_color(row[0], "00A551")
+                elif item["cycle"].upper() == "V":
+                    set_cell_background_color(row[0], "DCB00A")
+                elif item["cycle"].upper() == "A":
+                    set_cell_background_color(row[0], "EC1C24")
+                set_cell_text_color(row[0])
+
+                row = table.add_row().cells
+                cell = row[0]
                 cell.paragraphs[0].clear()  # Limpiar cualquier texto existente
 
                 for recomendacion in recomendaciones:
                     p = cell.add_paragraph(recomendacion)
                     apply_bullets(p)
-                row[1].merge(row[5])
+                row[0].merge(row[5])
                 for cell in row:
                     bottom_border = OxmlElement("w:bottom")
                     bottom_border.set(
@@ -544,6 +686,7 @@ def insert_table_conclusion(
                 f"ESTRUCTURA DE PONDERACIÓN \n NIVEL {sizeName} - PESV"
             )
             heading_row[0].merge(heading_row[7])
+            align_cell_text(heading_row[0], "center", "center")
 
             title_row = table.add_row().cells
             title_row[0].text = "FASE"
@@ -552,6 +695,9 @@ def insert_table_conclusion(
             title_row[2].merge(title_row[5])
             title_row[6].text = "% PASO"
             title_row[7].text = "% FASE"
+            for cell in title_row:
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
 
             VALID_STEPS = {
                 "P": "PLANEAR",
@@ -569,13 +715,27 @@ def insert_table_conclusion(
                         percentage = round(cycle["cycle_percentage"], 2)
                         set_vertical_cell_direction(cells[0], "tbRl")
                         cells[0].text = phase_name
+                        align_cell_text(cells[0], "center", "center")
+                        if cycle["cycle"].upper() == "P":
+                            set_cell_background_color(cells[0], "0066B2")
+                        elif cycle["cycle"].upper() == "H":
+                            set_cell_background_color(cells[0], "00A551")
+                        elif cycle["cycle"].upper() == "V":
+                            set_cell_background_color(cells[0], "DCB00A")
+                        elif cycle["cycle"].upper() == "A":
+                            set_cell_background_color(cells[0], "EC1C24")
+                        set_cell_text_color(cells[0])
+
                         cells[7].text = f"{percentage}%"
+                        align_cell_text(cells[7], "center", "center")
+
                     cells[1].text = str(requerimiento["step"])
                     for requirement in requerimiento["requirements"]:
                         cells[2].text = str(requirement["requirement_name"])
                         cells[2].merge(cells[5])
                     req_percentage = round(requerimiento["percentage"], 2)
                     cells[6].text = f"{req_percentage}%"
+                    align_cell_text(cells[6], "center", "center")
 
                 start_idx = len(table.rows) - len(cycle["steps"])
                 end_idx = len(table.rows) - 1
@@ -600,30 +760,136 @@ def insert_table_conclusion_articulated(
                 f"ESTRUCTURA DE PONDERACIÓN \n NIVEL {sizeName} - PESV - ARTICULACIONES"
             )
             heading_row[0].merge(heading_row[7])
+
+            align_cell_text(heading_row[0], "center", "center")
             title_row = table.add_row().cells
-            title_row[0].text = "FASE"
-            title_row[1].text = "PASO"
-            title_row[2].text = "DESCRIPCIÓN"
-            title_row[2].merge(title_row[5])
-            title_row[6].text = "NIVEL CUMPLIMIENTO"
-            title_row[6].merge(title_row[7])
+            title_row[0].text = "PASO"
+            title_row[1].text = "DESCRIPCIÓN"
+            title_row[1].merge(title_row[6])
+            title_row[7].text = "NIVEL CUMPLIMIENTO"
+            align_cell_text(title_row[7], "center", "center")
+            for cell in title_row:
+                align_cell_text(cell, "left", "center")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
+
+            VALID_STEPS = {
+                "P": "PLANEAR",
+                "H": "HACER",
+                "V": "VERIFICAR",
+                "A": "ACTUAR",
+            }
+            # To track rows for merging compliance column
+            row_indices = []
             for cycle_data in datas_by_cycle:
-                cycle = cycle_data["cycle"]
-                for step_data in cycle_data["steps"]:
-                    step = step_data["step"]
-                    for requirement_data in step_data["requirements"]:
+                phase_name = VALID_STEPS.get(
+                    cycle_data["cycle"].upper(), "Otros"
+                ).upper()
+
+                # Add a row for the phase name
+                phase_row = table.add_row().cells
+                phase_row[0].text = phase_name
+                phase_row[0].merge(phase_row[7])
+                align_cell_text(phase_row[0], "center", "center")
+                if cycle_data["cycle"].upper() == "P":
+                    set_cell_background_color(phase_row[0], "0066B2")
+                elif cycle_data["cycle"].upper() == "H":
+                    set_cell_background_color(phase_row[0], "00A551")
+                elif cycle_data["cycle"].upper() == "V":
+                    set_cell_background_color(phase_row[0], "DCB00A")
+                elif cycle_data["cycle"].upper() == "A":
+                    set_cell_background_color(phase_row[0], "EC1C24")
+                set_cell_text_color(phase_row[0])
+
+                for requerimiento in cycle_data["steps"]:
+                    step_start_row_index = len(table.rows)
+                    # Add a row for each step-requirement
+                    for requirement_data in requerimiento["requirements"]:
                         requirement_name = requirement_data["requirement_name"]
-                        # Obtener la última pregunta
                         last_question = requirement_data["questions"][-1]
                         last_question_name = last_question["question_name"]
                         last_compliance = last_question["compliance"]
 
-                        row_cells = table.add_row().cells
-                        row_cells[0].text = cycle
-                        row_cells[1].text = str(step)
-                        row_cells[2].text = f"{requirement_name} - {last_question_name}"
-                        row_cells[2].merge(row_cells[5])
-                        row_cells[6].text = last_compliance
+                        # Add row for step and requirement
+                        step_row = table.add_row().cells
+                        step_row[0].text = (
+                            f"{requerimiento['step']} - {requirement_name}"
+                        )
+                        step_row[0].merge(step_row[6])  # Merge description columns
+                        step_row[7].text = last_compliance
+                        align_cell_text(step_row[7], "center", "center")
+
+                        # Add row for last question
+                        question_row = table.add_row().cells
+                        question_row[0].text = ""  # Empty cell for FASE
+                        question_row[1].text = last_question_name
+                        question_row[1].merge(
+                            question_row[6]
+                        )  # Merge description columns
+                        question_row[7].text = ""  # Empty compliance cell
+
+                    row_indices.append((step_start_row_index, len(table.rows) - 1))
+            # Merge "NIVEL CUMPLIMIENTO" cells vertically
+            for start_idx, end_idx in row_indices:
+                if end_idx < len(table.rows) and start_idx < len(table.rows):
+                    cell = table.cell(start_idx, 7)
+                    cell.text = cell.text  # Ensure cell has text
+                    for idx in range(start_idx + 1, end_idx + 1):
+                        table.cell(idx, 7).text = ""  # Clear text in cells to be merged
+                    cell.merge(table.cell(end_idx, 7))
+                    trim_merged_cell(cell)  # Trim merged cell
+                    align_cell_text(cell, "center", "center")  # Align merged cell
+            table._element.getparent().insert(index + 1, table._element)
+            return  # Salir después de insertar la tabla para evitar múltiples inserciones
+
+
+def insert_table_conclusion_percentage_articuled(
+    doc: Document, placeholder: str, datas_by_cycle
+):
+    for paragraph in doc.paragraphs:
+        if placeholder in paragraph.text:
+            index = paragraph._element.getparent().index(paragraph._element)
+            table = doc.add_table(rows=1, cols=5)
+            table.style = "Table Grid"
+            heading_row = table.rows[0].cells
+            heading_row[0].text = "TOTAL ARTICULACIONES"
+            heading_row[1].text = "CUMPLE"
+            heading_row[2].text = "NO CUMPLE"
+            heading_row[3].text = "CUMPLE PARCIALMENTE"
+            heading_row[4].text = "NO APLICA"
+            for cell in heading_row:
+                align_cell_text(cell, "left", "center")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
+            count_cumple = 0
+            count_no_cumple = 0
+            count_cumple_parcial = 0
+            count_no_aplica = 0
+            for cycle_data in datas_by_cycle:
+                for step_data in cycle_data["steps"]:
+                    for requirement_data in step_data["requirements"]:
+                        # Obtener la última pregunta
+                        last_question = requirement_data["questions"][-1]
+                        last_compliance = last_question["compliance"]
+
+                        if last_compliance == "CUMPLE":
+                            count_cumple += 1
+                        elif last_compliance == "NO CUMPLE":
+                            count_no_cumple += 1
+                        elif last_compliance == "CUMPLE PARCIALMENTE":
+                            count_cumple_parcial += 1
+                        elif last_compliance == "NO APLICA":
+                            count_no_aplica += 1
+
+            title_row = table.add_row().cells
+            title_row[0].text = str(
+                count_cumple + count_no_cumple + count_cumple_parcial + count_no_aplica
+            )
+            title_row[1].text = str(count_cumple)  # Cumple
+            title_row[2].text = str(count_no_cumple)  # No Cumple
+            title_row[3].text = str(count_cumple_parcial)  # Cumple Parcialmente
+            title_row[4].text = str(count_no_aplica)  # No Aplica
+
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
@@ -634,16 +900,19 @@ def insert_table_conclusion_percentage(
     for paragraph in doc.paragraphs:
         if placeholder in paragraph.text:
             index = paragraph._element.getparent().index(paragraph._element)
-            table = doc.add_table(rows=1, cols=5)
+            table = doc.add_table(rows=1, cols=6)
             table.style = "Table Grid"
             heading_row = table.rows[0].cells
             heading_row[0].text = "TOTAL ITEMS"
             heading_row[1].text = "CUMPLE"
             heading_row[2].text = "NO CUMPLE"
             heading_row[3].text = "CUMPLE PARCIALMENTE"
-            heading_row[3].text = "NO APLICA"
-            heading_row[4].text = "PORCENTJAE CUMPLIMIENTO"
-
+            heading_row[4].text = "NO APLICA"
+            heading_row[5].text = "PORCENTJAE CUMPLIMIENTO"
+            for cell in heading_row:
+                align_cell_text(cell, "left", "center")
+                set_cell_background_color(cell, "2f4858")
+                set_cell_text_color(cell)
             total_items = counts[0]["count"] + counts[1]["count"] + counts[2]["count"]
 
             title_row = table.add_row().cells
@@ -651,8 +920,8 @@ def insert_table_conclusion_percentage(
             title_row[1].text = str(counts[0]["count"])  # Cumple
             title_row[2].text = str(counts[1]["count"])  # No Cumple
             title_row[3].text = str(counts[2]["count"])  # Cumple Parcialmente
-            title_row[3].text = str(counts[3]["count"])  # No Aplica
-            title_row[4].text = f"{perecentaje}%"
+            title_row[4].text = str(counts[3]["count"])  # No Aplica
+            title_row[5].text = f"{perecentaje}%"
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
