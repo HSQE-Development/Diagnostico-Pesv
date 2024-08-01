@@ -2,6 +2,7 @@ from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
 from apps.sign.models import User
 from apps.arl.models import Arl
+from apps.diagnosis.core.models import Diagnosis
 
 
 class Mission(SoftDeletes, Timestampable):
@@ -51,7 +52,6 @@ class Company(SoftDeletes, Timestampable):
     dependant_phone = models.CharField(max_length=20, null=True)
     email = models.CharField(max_length=200, null=True)
     acquired_certification = models.CharField(max_length=255, null=True)
-    diagnosis = models.CharField(max_length=255, null=True)
     consultor = models.OneToOneField(
         User, on_delete=models.SET_NULL, null=True, unique=True
     )
@@ -68,23 +68,5 @@ class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnost
     name = models.CharField(max_length=255, unique=True, null=None)
 
 
-class Fleet(SoftDeletes, Timestampable):
-    company = models.ForeignKey(Company, on_delete=models.CASCADE)
-    vehicle_question = models.ForeignKey(VehicleQuestions, on_delete=models.CASCADE)
-    quantity_owned = models.IntegerField(default=0, null=False)
-    quantity_third_party = models.IntegerField(default=0, null=False)
-    quantity_arrended = models.IntegerField(default=0, null=False)
-    quantity_contractors = models.IntegerField(default=0, null=False)
-    quantity_intermediation = models.IntegerField(default=0, null=False)
-    quantity_leasing = models.IntegerField(default=0, null=False)
-    quantity_renting = models.IntegerField(default=0, null=False)
-
-
 class DriverQuestion(SoftDeletes, Timestampable):
     name = models.CharField(max_length=255)
-
-
-class Driver(SoftDeletes, Timestampable):
-    company = models.ForeignKey(Company, on_delete=models.CASCADE)
-    driver_question = models.ForeignKey(DriverQuestion, on_delete=models.CASCADE)
-    quantity = models.IntegerField(default=0, null=False)

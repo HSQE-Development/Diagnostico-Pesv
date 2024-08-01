@@ -1,5 +1,4 @@
 # service.py
-from django.core.exceptions import ValidationError
 from .models import *
 from apps.sign.models import User
 from django.core.exceptions import ObjectDoesNotExist
@@ -58,3 +57,14 @@ class CompanyService:
             )
         except ObjectDoesNotExist:
             raise ValueError(f"El valor de mission_id={mission_id} no es válido.")
+
+    @staticmethod
+    def get_company(company_id):
+        return Company.objects.get(pk=company_id)
+
+    @staticmethod
+    def update_company_size(company, total_vehicles, total_drivers):
+        company_size_id = CompanyService.determine_company_size(
+            company.mission.id, total_vehicles, total_drivers
+        )
+        return CompanySize.objects.get(pk=company_size_id)

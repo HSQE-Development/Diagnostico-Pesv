@@ -13,8 +13,6 @@ from .serializers import (
     MissionSerializer,
     VehicleQuestionSerializer,
     DriverQuestionSerializer,
-    DriverSerializer,
-    FleetSerializer,
     MisionalitySizeCriteriaSerializer,
     CiiuSerializer,
 )
@@ -24,12 +22,12 @@ from .models import (
     Mission,
     CompanySize,
     VehicleQuestions,
-    Fleet,
     DriverQuestion,
-    Driver,
     MisionalitySizeCriteria,
     Ciiu,
 )
+from apps.diagnosis.core.models import Fleet, Driver
+from apps.diagnosis.infraestructure.serializers import DriverSerializer, FleetSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from apps.sign.permissions import IsSuperAdmin, IsAdmin
@@ -234,32 +232,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False)
-    def findFleetsByCompanyId(self, request: Request):
-        company_id = request.query_params.get("company")
-        try:
-            fleets = Fleet.objects.filter(deleted_at=None, company=company_id)
-            serializer = FleetSerializer(fleets, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception as ex:
-            logger.error(f"Error en findFleetsByCompanyId: {str(ex)}")
-            return Response(
-                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=False)
-    def findDriversByCompanyId(self, request: Request):
-        company_id = request.query_params.get("company")
-        try:
-            drivers = Driver.objects.filter(deleted_at=None, company=company_id)
-            serializer = DriverSerializer(drivers, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception as ex:
-            logger.error(f"Error en findDriversByCompanyId: {str(ex)}")
-            return Response(
-                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
     @action(detail=False, methods=[HTTPMethod.POST])
     def uploadCiiuCodes(self, request: Request):
         data = request.data.get("ciiu_csv_base64")
@@ -319,97 +291,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-    @action(detail=False, methods=[HTTPMethod.POST])
-    def saveAnswerCuestions(self, request: Request):
-        try:
-            company_id = request.data.get("company")
-            vehicle_data = request.data.get("vehicleData", [])
-            driver_data = request.data.get("driverData", [])
-
-            company = self.get_company(company_id)
-            total_vehicles, vehicle_errors = self.process_vehicle_data(
-                company_id, vehicle_data
-            )
-            total_drivers, driver_errors = self.process_driver_data(
-                company_id, driver_data
-            )
-
-            company.size = self.update_company_size(
-                company, total_vehicles, total_drivers
-            )
-            company.diagnosis_step = 1
-            company.save()
-
-            if vehicle_errors or driver_errors:
-                return self.build_error_response(vehicle_errors, driver_errors)
-
-            return self.build_success_response(vehicle_data, driver_data)
-
-        except Company.DoesNotExist:
-            return Response(
-                {"error": "Company not found."}, status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as ex:
-            logger.error(f"Error en saveAnswerCuestions: {str(ex)}")
-            return Response(
-                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def get_company(self, company_id):
-        return Company.objects.get(pk=company_id)
-
-    def process_vehicle_data(self, company_id, vehicle_data):
-        vehicle_errors = []
-        total_vehicles = functionUtils.calculate_total_vehicles_quantities_for_company(
-            vehicle_data
-        )
-        for vehicle in vehicle_data:
-            vehicle["company"] = company_id
-            fleet_instance = Fleet.objects.filter(
-                company=company_id, vehicle_question=vehicle.get("vehicle_question")
-            ).first()
-            serializer_fleet = FleetSerializer(instance=fleet_instance, data=vehicle)
-            if serializer_fleet.is_valid():
-                serializer_fleet.save()
-            else:
-                vehicle_errors.append(serializer_fleet.errors)
-        return total_vehicles, vehicle_errors
-
-    def process_driver_data(self, company_id, driver_data):
-        driver_errors = []
-        total_drivers = functionUtils.calculate_total_drivers_quantities_for_company(
-            driver_data
-        )
-        for driver in driver_data:
-            driver["company"] = company_id
-            driver_instance = Driver.objects.filter(
-                company=company_id, driver_question=driver.get("driver_question")
-            ).first()
-            serializer_driver = DriverSerializer(instance=driver_instance, data=driver)
-            if serializer_driver.is_valid():
-                serializer_driver.save()
-            else:
-                driver_errors.append(serializer_driver.errors)
-        return total_drivers, driver_errors
-
-    def update_company_size(self, company, total_vehicles, total_drivers):
-        company_size_id = CompanyService.determine_company_size(
-            company.mission.id, total_vehicles, total_drivers
-        )
-        return CompanySize.objects.get(pk=company_size_id)
-
-    def build_error_response(self, vehicle_errors, driver_errors):
-        return Response(
-            {"vehicleErrors": vehicle_errors, "driverErrors": driver_errors},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    def build_success_response(self, vehicle_data, driver_data):
-        return Response(
-            {"vehicleData": vehicle_data, "driverData": driver_data},
-            status=status.HTTP_201_CREATED,
-        )
 
 
 # @api_view(["POST"])

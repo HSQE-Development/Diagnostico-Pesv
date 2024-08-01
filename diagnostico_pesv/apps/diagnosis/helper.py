@@ -15,6 +15,14 @@ import openpyxl
 from openpyxl.chart import BarChart, Reference
 from openpyxl.drawing.image import Image
 import pandas as pd
+import subprocess
+import os
+import pypandoc
+import tempfile
+import pdfkit
+import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 
 def align_cell_text(cell, horizontal="center", vertical="center"):
@@ -849,14 +857,13 @@ def insert_table_conclusion_percentage_articuled(
     for paragraph in doc.paragraphs:
         if placeholder in paragraph.text:
             index = paragraph._element.getparent().index(paragraph._element)
-            table = doc.add_table(rows=1, cols=5)
+            table = doc.add_table(rows=1, cols=4)
             table.style = "Table Grid"
             heading_row = table.rows[0].cells
-            heading_row[0].text = "TOTAL ARTICULACIONES"
-            heading_row[1].text = "CUMPLE"
-            heading_row[2].text = "NO CUMPLE"
-            heading_row[3].text = "CUMPLE PARCIALMENTE"
-            heading_row[4].text = "NO APLICA"
+            heading_row[0].text = "PASOS EVALUADOS"
+            heading_row[0].merge(heading_row[1])
+            heading_row[2].text = "SIN ARTICULAR"
+            heading_row[2].merge(heading_row[3])
             for cell in heading_row:
                 align_cell_text(cell, "left", "center")
                 set_cell_background_color(cell, "2f4858")
@@ -885,10 +892,15 @@ def insert_table_conclusion_percentage_articuled(
             title_row[0].text = str(
                 count_cumple + count_no_cumple + count_cumple_parcial + count_no_aplica
             )
-            title_row[1].text = str(count_cumple)  # Cumple
+            title_row[0].merge(title_row[1])
+            align_cell_text(title_row[0], "center", "center")
+            
+            # title_row[1].text = str(count_cumple)  # Cumple
             title_row[2].text = str(count_no_cumple)  # No Cumple
-            title_row[3].text = str(count_cumple_parcial)  # Cumple Parcialmente
-            title_row[4].text = str(count_no_aplica)  # No Aplica
+            title_row[2].merge(title_row[3])
+            align_cell_text(title_row[2], "center", "center")
+            # title_row[3].text = str(count_cumple_parcial)  # Cumple Parcialmente
+            # title_row[4].text = str(count_no_aplica)  # No Aplica
 
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
@@ -913,7 +925,12 @@ def insert_table_conclusion_percentage(
                 align_cell_text(cell, "left", "center")
                 set_cell_background_color(cell, "2f4858")
                 set_cell_text_color(cell)
-            total_items = counts[0]["count"] + counts[1]["count"] + counts[2]["count"]
+            total_items = (
+                counts[0]["count"]
+                + counts[1]["count"]
+                + counts[2]["count"]
+                + counts[3]["count"]
+            )
 
             title_row = table.add_row().cells
             title_row[0].text = str(total_items)
@@ -1013,3 +1030,25 @@ def create_bar_chart(datas_by_cycle):
         f.write(img_buffer.getvalue())
 
     return image_file
+
+
+def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
+    from docx2pdf import convert
+
+    # Leer el contenido del archivo DOCX
+    with BytesIO(docx_bytes) as docx_buffer:
+        # Guardar el contenido DOCX en un archivo temporal
+        with open("temp.docx", "wb") as temp_docx_file:
+            temp_docx_file.write(docx_buffer.getvalue())
+
+    convert("temp.docx", "temp.pdf")
+    # Leer el contenido del archivo PDF y convertirlo a base64
+    with open("temp.pdf", "rb") as pdf_file:
+        pdf_content = pdf_file.read()
+        pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
+
+    # Limpiar archivos temporales
+    os.remove("temp.docx")
+    os.remove("temp.pdf")
+
+    return pdf_base64
