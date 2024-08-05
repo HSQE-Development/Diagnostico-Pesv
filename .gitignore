@@ -97,7 +97,7 @@ ipython_config.py
 .idea/
 
 # Environments
-.env
+*.env.*
 .venv
 env/
 venv/

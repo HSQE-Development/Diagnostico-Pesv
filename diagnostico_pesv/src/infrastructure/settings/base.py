@@ -11,11 +11,12 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
 from datetime import timedelta
 import os
-from dotenv import load_dotenv
-load_dotenv()
 
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env.development"
+load_dotenv(ENV_FILE)
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,10 +27,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG") == "True"
 
 ALLOWED_HOSTS = []
+AUTH_USER_MODEL = "authorize.User"
 
 
 # Application definition
@@ -45,11 +45,9 @@ INSTALLED_APPS = [
     "corsheaders",
     "timestamps",
     "django_seed",
-    "apps.sign",
-    "apps.company",
-    "apps.diagnosis",
-    "apps.diagnosis_requirement",
-    "apps.arl",
+    "rest_framework",
+    # project
+    "src.infrastructure.orm.db.authorize",
 ]
 
 MIDDLEWARE = [
@@ -63,7 +61,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 CORS_ALLOW_ALL_ORIGINS = True
-ROOT_URLCONF = "diagnostico_pesv.urls"
+ROOT_URLCONF = "src.infrastructure.server.urls"
+API_ROUTES = "src.infrastructure.api.routes"
 
 TEMPLATES = [
     {
@@ -81,26 +80,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "diagnostico_pesv.wsgi.application"
-
-
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "NAME": os.getenv("DB_NAME"),  # Nombre de la base de datos
-        "USER": os.getenv("DB_USER"),  # Usuario de MySQL
-        "PASSWORD": os.getenv("DB_PASSWORD"),  # Contraseña de MySQL
-        "HOST": os.getenv(
-            "DB_HOST"
-        ),  # Host donde se encuentra la base de datos (usualmente 'localhost')
-        "PORT": os.getenv("DB_PORT"),  # Puerto de MySQL (por defecto es 3306)
-        "OPTIONS": {"init_command": "SET sql_mode='STRICT_TRANS_TABLES'"},
-    }
-}
-
+WSGI_APPLICATION = "src.infrastructure.server.wsgi.application"
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -155,27 +135,27 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-AUTH_USER_MODEL = "sign.User"
 
+# AUTH_USER_MODEL = "sign.User"
+
+
+# Loggging
+# https://docs.djangoproject.com/en/3.2/topics/logging/
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {module} {message}",
-            "style": "{",
+            "format": "[%(levelname)s] %(asctime)s [%(name)s %(funcName)s %(lineno)d] %(message)s"
         },
-        "simple": {
-            "format": "{levelname} {message}",
-            "style": "{",
-        },
+        "simple": {"format": "[%(levelname)s] %(message)s"},
     },
     "handlers": {
         "console": {
-            "level": "DEBUG",
+            "level": "INFO",
             "class": "logging.StreamHandler",
-            "formatter": "simple",
+            "formatter": "verbose",
         },
         "file": {
             "level": "DEBUG",
@@ -187,17 +167,11 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console", "file"],
-            "level": "ERROR",
-            "propagate": True,
-        },
-        "django.request": {
-            "handlers": ["file"],
-            "level": "ERROR",
             "propagate": False,
         },
-        "apps.company": {
-            "handlers": ["file"],
-            "level": "ERROR",
+        "": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
             "propagate": True,
         },
     },
