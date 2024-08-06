@@ -1,5 +1,5 @@
-from apps.diagnosis.core.models import Diagnosis, Checklist_Requirement, Compliance
-from apps.diagnosis.application.interfaces import (
+from apps.diagnosis.models import Diagnosis, Checklist_Requirement, Compliance
+from apps.diagnosis.interfaces import (
     DiagnosisRepositoryInterface,
     CheckListRepositoryInterface,
     CheckListRequirementRepositoryInterface,

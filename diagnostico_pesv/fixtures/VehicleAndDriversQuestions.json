@@ -1,63 +1,72 @@
 [
     {
-        "model": "company.VehicleQuestions",
+        "model": "diagnosis.VehicleQuestions",
         "pk": "1",
         "fields": {
-            "name": "Número de motocicletas, patinetas",
+            "name": "Número de vehículos livianos (por ejemplo camperos, camionetas, microbuses)",
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.VehicleQuestions",
+        "model": "diagnosis.VehicleQuestions",
         "pk": "2",
         "fields": {
-            "name": "Número de vehículos livianos",
+            "name": "Vehículos rígidos (por ejemplo busetas, buses, volquetas, mixer)",
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.VehicleQuestions",
+        "model": "diagnosis.VehicleQuestions",
         "pk": "3",
         "fields": {
-            "name": "Número de vehículos Mixer",
+            "name": "Vehículos articulados (por ejemplo tractocamión, biarticulados, carrotanques)",
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.VehicleQuestions",
+        "model": "diagnosis.VehicleQuestions",
         "pk": "4",
         "fields": {
-            "name": "Número de vehículos Furgón",
+            "name": "Vehículos no automotores (bicicletas, triciclos, tracción animal)",
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.VehicleQuestions",
+        "model": "diagnosis.VehicleQuestions",
         "pk": "5",
         "fields": {
-            "name": "Número de vehiculos de carga (volquetas, tractomulas)",
+            "name": "Motocicletas",
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.VehicleQuestions",
+        "model": "diagnosis.VehicleQuestions",
         "pk": "6",
         "fields": {
-            "name": "Número de maquinaria amarilla (Cargadores)",
+            "name": "Montacargas",
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }
     },
     {
-        "model": "company.VehicleQuestions",
+        "model": "diagnosis.VehicleQuestions",
         "pk": "7",
         "fields": {
-            "name": "Número de vehículos no automotores (bicicletas, triciclo, tracción animal)",
+            "name": "Maquinaria de construcción (cargadores, retroexcavadoras, motoniveladoras)",
+            "created_at": "2024-07-10T12:00:00Z",
+            "updated_at": "2024-07-10T12:00:00Z"
+        }
+    },
+    {
+        "model": "diagnosis.VehicleQuestions",
+        "pk": "8",
+        "fields": {
+            "name": "Patinetas",
             "created_at": "2024-07-10T12:00:00Z",
             "updated_at": "2024-07-10T12:00:00Z"
         }

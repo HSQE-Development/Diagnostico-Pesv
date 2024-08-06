@@ -4,8 +4,6 @@ from .models import (
     Segments,
     Mission,
     CompanySize,
-    VehicleQuestions,
-    DriverQuestion,
     SizeCriteria,
     MisionalitySizeCriteria,
     Ciiu,
@@ -14,6 +12,7 @@ from apps.sign.models import User
 from apps.sign.serializers import UserDetailSerializer
 from apps.arl.models import Arl
 from apps.arl.serializers import ArlSerializer
+from apps.diagnosis.serializers import DiagnosisSerializer
 
 
 class MissionSerializer(serializers.ModelSerializer):
@@ -114,6 +113,8 @@ class CompanySerializer(serializers.ModelSerializer):
     )
     ciius_detail = CiiuSerializer(source="ciius", read_only=True, many=True)
 
+    company_diagnosis = DiagnosisSerializer(many=True, read_only=True)
+
     class Meta:
         model = Company
         fields = [
@@ -138,6 +139,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "size_detail",
             "ciius",
             "ciius_detail",
+            "company_diagnosis",
         ]
 
     def get_misionality_size_criteria(self, obj):
@@ -149,21 +151,3 @@ class CompanySerializer(serializers.ModelSerializer):
             misionality_size_criteria, many=True
         )
         return serializer.data
-
-
-class VehicleQuestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VehicleQuestions
-        fields = [
-            "id",
-            "name",
-        ]
-
-
-class DriverQuestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DriverQuestion
-        fields = [
-            "id",
-            "name",
-        ]

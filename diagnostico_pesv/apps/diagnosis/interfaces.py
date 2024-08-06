@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from apps.diagnosis.core.models import (
+from apps.diagnosis.models import (
     Diagnosis,
     Checklist_Requirement,
     Compliance,

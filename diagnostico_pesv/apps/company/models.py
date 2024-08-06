@@ -2,7 +2,6 @@ from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
 from apps.sign.models import User
 from apps.arl.models import Arl
-from apps.diagnosis.core.models import Diagnosis
 
 
 class Mission(SoftDeletes, Timestampable):
@@ -62,11 +61,3 @@ class Company(SoftDeletes, Timestampable):
         CompanySize, on_delete=models.SET_NULL, null=True, blank=False
     )  # Añadido
     ciius = models.ManyToManyField(Ciiu, related_name="companies")
-
-
-class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico
-    name = models.CharField(max_length=255, unique=True, null=None)
-
-
-class DriverQuestion(SoftDeletes, Timestampable):
-    name = models.CharField(max_length=255)

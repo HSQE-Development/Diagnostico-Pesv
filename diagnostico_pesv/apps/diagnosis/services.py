@@ -1,5 +1,5 @@
 from .models import *
-from ..infraestructure.serializers import *
+from .serializers import *
 from utils import functionUtils
 from rest_framework.response import Response
 from rest_framework import status

@@ -1,4 +1,4 @@
-from apps.diagnosis.core.models import (
+from apps.diagnosis.models import (
     Diagnosis,
     CheckList,
     Checklist_Requirement,
@@ -7,7 +7,7 @@ from apps.diagnosis.core.models import (
     Diagnosis_Questions,
 )
 from apps.diagnosis_requirement.core.models import Diagnosis_Requirement
-from apps.diagnosis.application.interfaces import (
+from apps.diagnosis.interfaces import (
     DiagnosisRepositoryInterface,
     CheckListRepositoryInterface,
     CheckListRequirementRepositoryInterface,
@@ -91,6 +91,7 @@ class CheckListRequirementRepository(CheckListRequirementRepositoryInterface):
         )
 
     def get_checklist_requirement_by_id_and_diagnosis_id(self, id, diagnosis_id):
+
         return Checklist_Requirement.objects.filter(
             pk=id, diagnosis=diagnosis_id
         ).first()
@@ -104,7 +105,7 @@ class CheckListRequirementRepository(CheckListRequirementRepositoryInterface):
         )
 
     def get_requirement_by_id(self, id):
-        return Diagnosis_Requirement.objects.get(pk=id)
+        return Diagnosis_Requirement.objects.filter(pk=id).first()
 
 
 class ComplianceRepository(IComplianceRepository):

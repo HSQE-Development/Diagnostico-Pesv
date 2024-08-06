@@ -16,39 +16,41 @@ from apps.diagnosis_requirement.core.models import Diagnosis_Requirement, Recome
 from apps.diagnosis_requirement.infraestructure.serializers import (
     Recomendation_Serializer,
 )
-from ..core.models import (
+from .models import (
     Diagnosis_Questions,
     CheckList,
     Diagnosis,
     Checklist_Requirement,
+    VehicleQuestions,
+    DriverQuestion,
 )
-from ..infraestructure.serializers import (
+from .serializers import (
     Diagnosis_QuestionsSerializer,
     FleetSerializer,
     DriverSerializer,
     DiagnosisSerializer,
 )
-from apps.company.models import Company, VehicleQuestions, DriverQuestion
-from apps.diagnosis.core.models import Fleet, Driver
+from apps.company.models import Company
+from apps.diagnosis.models import Fleet, Driver
 from utils.functionUtils import blank_to_null
 from django.db import transaction
 from docx import Document
 from io import BytesIO
 import os
 from django.conf import settings
-from ..helper import *
+from .helper import *
 from django.db.models import Sum, Count
 from collections import defaultdict
 from enum import Enum
 from django.db.models import Value, Case, CharField, When
-from ..core.services import DiagnosisService
+from .services import DiagnosisService
 from django.core.exceptions import ObjectDoesNotExist
 import pythoncom
 from rest_framework import status, viewsets
 from http import HTTPMethod
 from apps.company.service import CompanyService
-from ..infraestructure.repositories import *
-from ..application.use_cases import *
+from .repositories import *
+from .use_cases import *
 from apps.diagnosis_requirement.application.use_cases import (
     DiagnosisRequirementUseCases,
 )
@@ -407,10 +409,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 for diagnosis_requirement in diagnosisRequirementDto:
                     with transaction.atomic():
                         req_id = diagnosis_requirement["requirement"]
+
                         get_cheklist_req_by_id_and_diagnosis = (
                             GetCheckListRequirementByIdAndDiagnosisId(
                                 self.checklist_requirement_repository,
-                                req_id,
+                                int(req_id),
                                 diagnosis.id,
                             )
                         )
@@ -424,7 +427,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                         compliance = get_compliance.execute()
 
                         use_case_get_requirement = GetRequirementById(
-                            self.checklist_requirement_repository, req_id
+                            self.checklist_requirement_repository, int(req_id)
                         )
                         requirement = use_case_get_requirement.execute()
 
@@ -476,8 +479,8 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 if not company.diagnosis_step == 2:
                     company.diagnosis_step = 2
                     company.save()
-                
-                #Se debe finalizar cuando se cree un nuevo diagnostico no cuando se responda!!!
+
+                # Se debe finalizar cuando se cree un nuevo diagnostico no cuando se responda!!!
                 # diagnosis.is_finalized = True
                 # update_diagnosis_use_case = UpdateDiagnosis(self.diagnosis_repository, diagnosis)
                 # update_diagnosis_use_case.execute()

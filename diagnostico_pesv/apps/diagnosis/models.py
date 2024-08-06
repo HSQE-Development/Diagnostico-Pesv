@@ -1,7 +1,15 @@
 from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
 from apps.diagnosis_requirement.core.models import Diagnosis_Requirement
-from apps.company.models import Company, VehicleQuestions, DriverQuestion
+from apps.company.models import Company
+
+
+class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico
+    name = models.CharField(max_length=255, unique=True, null=None)
+
+
+class DriverQuestion(SoftDeletes, Timestampable):
+    name = models.CharField(max_length=255)
 
 
 # Create your views here.
@@ -62,6 +70,7 @@ class Fleet(SoftDeletes, Timestampable):
     quantity_intermediation = models.IntegerField(default=0, null=False)
     quantity_leasing = models.IntegerField(default=0, null=False)
     quantity_renting = models.IntegerField(default=0, null=False)
+    quantity_employees = models.IntegerField(default=0, null=False)
 
 
 class Driver(SoftDeletes, Timestampable):

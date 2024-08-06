@@ -11,8 +11,6 @@ from .serializers import (
     CompanySerializer,
     SegmentSerializer,
     MissionSerializer,
-    VehicleQuestionSerializer,
-    DriverQuestionSerializer,
     MisionalitySizeCriteriaSerializer,
     CiiuSerializer,
 )
@@ -21,13 +19,16 @@ from .models import (
     Segments,
     Mission,
     CompanySize,
-    VehicleQuestions,
-    DriverQuestion,
     MisionalitySizeCriteria,
     Ciiu,
 )
-from apps.diagnosis.core.models import Fleet, Driver
-from apps.diagnosis.infraestructure.serializers import DriverSerializer, FleetSerializer
+from apps.diagnosis.models import Fleet, Driver, VehicleQuestions, DriverQuestion
+from apps.diagnosis.serializers import (
+    DriverSerializer,
+    FleetSerializer,
+    VehicleQuestionSerializer,
+    DriverQuestionSerializer,
+)
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from apps.sign.permissions import IsSuperAdmin, IsAdmin

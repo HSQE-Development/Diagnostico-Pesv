@@ -1,16 +1,29 @@
 from rest_framework import serializers
-from ..core.models import *
+from .models import *
 from apps.diagnosis_requirement.core.models import (
     Diagnosis_Requirement,
 )
 from apps.diagnosis_requirement.infraestructure.serializers import (
     Diagnosis_RequirementSerializer,
 )
-from apps.company.serializers import (
-    CompanySerializer,
-    VehicleQuestionSerializer,
-    DriverQuestionSerializer,
-)
+
+
+class VehicleQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VehicleQuestions
+        fields = [
+            "id",
+            "name",
+        ]
+
+
+class DriverQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DriverQuestion
+        fields = [
+            "id",
+            "name",
+        ]
 
 
 class ComplianceSerializer(serializers.ModelSerializer):
@@ -40,14 +53,14 @@ class Diagnosis_QuestionsSerializer(serializers.ModelSerializer):
 
 
 class DiagnosisSerializer(serializers.ModelSerializer):
-    company = serializers.PrimaryKeyRelatedField(
-        queryset=Company.objects.all(), write_only=True
-    )
-    company_detail = CompanySerializer(source="company", read_only=True)
+    # company = serializers.PrimaryKeyRelatedField(
+    #     queryset=Company.objects.all(), write_only=True
+    # )
+    # company_detail = CompanySerializer(source="company", read_only=True)
 
     class Meta:
         model = Diagnosis
-        fields = ["id", "company", "company_detail", "date_elabored"]
+        fields = ["id", "company", "date_elabored"]
         extra_kwargs = {"date_elabored": {"allow_null": True, "required": False}}
 
 
@@ -122,6 +135,7 @@ class FleetSerializer(serializers.ModelSerializer):
             "quantity_leasing",
             "quantity_renting",
             "vehicle_question",
+            "quantity_employees",
             "vehicle_question_detail",
             "diagnosis",
             "diagnosis_detail",
