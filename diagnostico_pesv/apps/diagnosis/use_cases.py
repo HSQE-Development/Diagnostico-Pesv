@@ -11,9 +11,12 @@ from typing import List, Dict
 
 
 class CreateDiagnosis:
-    def __init__(self, repository: DiagnosisRepositoryInterface, diagnosis_data: dict):
+    def __init__(
+        self, repository: DiagnosisRepositoryInterface, diagnosis_data: dict, consultor
+    ):
         self.repository = repository
         self.diagnosis_data = diagnosis_data
+        self.consultor = consultor
 
     def execute(self) -> Diagnosis:
         """
@@ -23,6 +26,7 @@ class CreateDiagnosis:
         """
         today = datetime.now().date()
         self.diagnosis_data["date_elabored"] = today
+        self.diagnosis_data["consultor"] = self.consultor
         # Pasar los datos del diccionario al repositorio
         return self.repository.save(self.diagnosis_data)
 
@@ -36,6 +40,9 @@ class GetUseCases:
 
     def get_unfinalized_diagnosis_for_company(self, company_id):
         return self.repository.get_unfinalized_diagnosis_for_company(company_id)
+
+    def get_by_id(self, diagnosis_id):
+        return self.repository.get_by_id(diagnosis_id)
 
 
 class CreateChecklistRequirement:

@@ -59,6 +59,7 @@ from apps.diagnosis_requirement.infraestructure.repositories import (
 )
 import traceback
 from django.db.models import Prefetch
+from apps.sign.models import User
 
 
 class CompanySizeEnum(Enum):
@@ -84,9 +85,13 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     @action(detail=False)
     def findFleetsByCompanyId(self, request: Request):
         company_id = request.query_params.get("company")
+        diagnosis_id = int(request.query_params.get("diagnosis", 0))
         try:
             use_case = GetUseCases(self.diagnosis_repository)
-            diagnosis = use_case.get_unfinalized_diagnosis_for_company(company_id)
+            if diagnosis_id > 0:
+                diagnosis = use_case.get_by_id(diagnosis_id)
+            else:
+                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company_id)
             fleets = Fleet.objects.filter(deleted_at=None, diagnosis=diagnosis)
             serializer = FleetSerializer(fleets, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -98,9 +103,13 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     @action(detail=False)
     def findDriversByCompanyId(self, request: Request):
         company_id = request.query_params.get("company")
+        diagnosis_id = int(request.query_params.get("diagnosis", 0))
         try:
             use_case = GetUseCases(self.diagnosis_repository)
-            diagnosis = use_case.get_unfinalized_diagnosis_for_company(company_id)
+            if diagnosis_id > 0:
+                diagnosis = use_case.get_by_id(diagnosis_id)
+            else:
+                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company_id)
             drivers = Driver.objects.filter(deleted_at=None, diagnosis=diagnosis)
             serializer = DriverSerializer(drivers, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -116,6 +125,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             group_by_step = (
                 request.query_params.get("group_by_step", "false").lower() == "true"
             )
+            diagnosis_id = int(request.query_params.get("diagnosis"))
             # Validar parámetro company_id
             if not company_id:
                 return Response(
@@ -131,7 +141,27 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND,
                 )
             get_use_case = GetUseCases(self.diagnosis_repository)
-            diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+            if diagnosis_id > 0:
+                diagnosis = get_use_case.get_by_id(diagnosis_id)
+                checklist_questions = CheckList.objects.filter(
+                    diagnosis_id=diagnosis.id
+                ).select_related("question", "compliance")
+                if not checklist_questions:
+                    questions_queryset = Diagnosis_Questions.objects.all()
+                else:
+                    question_ids = checklist_questions.values_list(
+                        "question_id", flat=True
+                    )
+                    questions_queryset = Diagnosis_Questions.objects.filter(
+                        id__in=question_ids
+                    )
+
+                # questions_queryset = CheckList.objects.filter(diagnosis_id=diagnosis_id)
+            else:
+                diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
+                    company.id
+                )
+                questions_queryset = Diagnosis_Questions.objects.all()
 
             use_case_get_check_list = GetCheckListRequirementByDiagnosisId(
                 self.checklist_requirement_repository, diagnosis.id
@@ -141,10 +171,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             # Obtener preguntas de diagnóstico
             requirements = Diagnosis_Requirement.objects.filter(
                 id__in=diagnosis_requirements.values_list("requirement", flat=True)
-            ).prefetch_related(
-                Prefetch("requirements", queryset=Diagnosis_Questions.objects.all())
-            )
-
+            ).prefetch_related(Prefetch("requirements", queryset=questions_queryset))
             # diagnosis_questions = (
             #     Diagnosis_Questions.objects.filter(
             #         requirement__in=diagnosis_requirements.values_list(
@@ -156,9 +183,17 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             # )
 
             if group_by_step:
-                grouped_questions = DiagnosisService.group_questions_by_step(
-                    diagnosis_requirements, requirements
-                )
+                if diagnosis_id > 0:
+                    grouped_questions = DiagnosisService.group_questions_by_step(
+                        diagnosis_requirements,
+                        requirements,
+                        checklist_questions=checklist_questions,
+                        include_compliance=True,
+                    )
+                else:
+                    grouped_questions = DiagnosisService.group_questions_by_step(
+                        diagnosis_requirements, requirements
+                    )
 
                 return Response(grouped_questions, status=status.HTTP_200_OK)
             # else:
@@ -169,8 +204,9 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
 
         except Exception as ex:
             # logger.error(f"Error en findQuestionsByCompanySize: {str(ex)}")
+            tb_str = traceback.format_exc()
             return Response(
-                {"error": "Error interno del servidor."},
+                {"error": str(ex), "traceback": tb_str},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -239,6 +275,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=[HTTPMethod.POST])
     def saveAnswerCuestions(self, request: Request):
+        consultor_id = request.data.get("consultor")
         company_id = request.data.get("company")
         vehicle_data = request.data.get("vehicleData", [])
         driver_data = request.data.get("driverData", [])
@@ -246,64 +283,74 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         diagnosis_serializer = DiagnosisSerializer(data=diagnosis_data)
 
         if diagnosis_serializer.is_valid():
-            today = datetime.now().date()
             try:
-                get_use_case = GetUseCases(self.diagnosis_repository)
-                existing_diagnosis = get_use_case.get_diagnosis_by_date_elabored(today)
+                with transaction.atomic():
+                    company = self.company_service.get_company(company_id)
+                    consultor = User.objects.get(id=consultor_id)
+                    get_use_case = GetUseCases(self.diagnosis_repository)
+                    # existing_diagnosis = get_use_case.get_diagnosis_by_date_elabored(today)
+                    existing_diagnosis = (
+                        get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+                    )
+                    # Se debe finalizar cuando se cree un nuevo diagnostico no cuando se responda!!!
+                    existing_diagnosis.is_finalized = True
+                    update_diagnosis_use_case = UpdateDiagnosis(
+                        self.diagnosis_repository, existing_diagnosis
+                    )
+                    update_diagnosis_use_case.execute()
 
-                if not existing_diagnosis:
                     create_diagnosis = CreateDiagnosis(
-                        self.diagnosis_repository, diagnosis_serializer.validated_data
+                        self.diagnosis_repository,
+                        diagnosis_serializer.validated_data,
+                        consultor,
                     )
                     diagnosis = create_diagnosis.execute()
-                else:
-                    diagnosis = existing_diagnosis
 
-                company = self.company_service.get_company(company_id)
-                total_vehicles, vehicle_errors = (
-                    self.diagnosis_service.process_vehicle_data(
-                        diagnosis.id, vehicle_data
+                    total_vehicles, vehicle_errors = (
+                        self.diagnosis_service.process_vehicle_data(
+                            diagnosis.id, vehicle_data
+                        )
                     )
-                )
-                total_drivers, driver_errors = (
-                    self.diagnosis_service.process_driver_data(
-                        diagnosis.id, driver_data
+                    total_drivers, driver_errors = (
+                        self.diagnosis_service.process_driver_data(
+                            diagnosis.id, driver_data
+                        )
                     )
-                )
-
-                company.size = self.company_service.update_company_size(
-                    company, total_vehicles, total_drivers
-                )
-                company.diagnosis_step = 1
-                company.save()
-
-                diagnosis_requirement_use_case = DiagnosisRequirementUseCases(
-                    self.diagnosis_requirement_repository
-                )
-                requirements = diagnosis_requirement_use_case.get_diagnosis_requirements_by_company_size(
-                    company.size.id
-                )
-                get_compliance = GetComplianceById(self.compliance_repository, 2)
-                compliance = get_compliance.execute()
-                for requirement in requirements:
-                    data = {
-                        "diagnosis": diagnosis,
-                        "compliance": compliance,
-                        "requirement": requirement,
-                    }
-                    create = CreateChecklistRequirement(
-                        self.checklist_requirement_repository, data
+                    size_and_type = self.company_service.update_company_size(
+                        company, total_vehicles, total_drivers
                     )
-                    create.execute()
+                    company.size = size_and_type
+                    diagnosis.type = size_and_type
+                    diagnosis.diagnosis_step = 1
+                    diagnosis.save()
 
-                if vehicle_errors or driver_errors:
-                    return self.diagnosis_service.build_error_response(
-                        vehicle_errors, driver_errors
+                    diagnosis_requirement_use_case = DiagnosisRequirementUseCases(
+                        self.diagnosis_requirement_repository
                     )
+                    requirements = diagnosis_requirement_use_case.get_diagnosis_requirements_by_company_size(
+                        diagnosis.type.id
+                    )
+                    get_compliance = GetComplianceById(self.compliance_repository, 2)
+                    compliance = get_compliance.execute()
+                    for requirement in requirements:
+                        data = {
+                            "diagnosis": diagnosis,
+                            "compliance": compliance,
+                            "requirement": requirement,
+                        }
+                        create = CreateChecklistRequirement(
+                            self.checklist_requirement_repository, data
+                        )
+                        create.execute()
 
-                return self.diagnosis_service.build_success_response(
-                    vehicle_data, driver_data
-                )
+                    if vehicle_errors or driver_errors:
+                        return self.diagnosis_service.build_error_response(
+                            vehicle_errors, driver_errors
+                        )
+
+                    return self.diagnosis_service.build_success_response(
+                        vehicle_data, driver_data, diagnosis
+                    )
 
             except Company.DoesNotExist:
                 return Response(
@@ -324,12 +371,19 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             diagnosisDto = diagnosis_data["diagnosisDto"]
             diagnosisRequirementDto = diagnosis_data["diagnosisRequirementDto"]
             company_id = diagnosis_data["company"]
+            consultor_id = diagnosis_data["consultor"]
 
             try:
                 company = self.company_service.get_company(company_id)
+                consultor = User.objects.get(pk=consultor_id)
             except Company.DoesNotExist:
                 return Response(
                     {"error": "Empresa no encontrada."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            except User.DoesNotExist:
+                return Response(
+                    {"error": "Consultor no encontrada."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
             with transaction.atomic():
@@ -476,14 +530,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     )
                     massive_create.execute()
 
-                if not company.diagnosis_step == 2:
-                    company.diagnosis_step = 2
-                    company.save()
-
-                # Se debe finalizar cuando se cree un nuevo diagnostico no cuando se responda!!!
-                # diagnosis.is_finalized = True
-                # update_diagnosis_use_case = UpdateDiagnosis(self.diagnosis_repository, diagnosis)
-                # update_diagnosis_use_case.execute()
+                if not diagnosis.diagnosis_step == 2:
+                    diagnosis.diagnosis_step = 2
+                if consultor.id != diagnosis.consultor.id:
+                    diagnosis.consultor = consultor
+                diagnosis.save()
 
                 return Response(
                     diagnosis_data,
@@ -502,7 +553,8 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         try:
             pythoncom.CoInitialize()
 
-            company_id = request.query_params.get("company")  # Default to 'word'
+            company_id = request.query_params.get("company")
+            diagnosis_id = int(request.query_params.get("diagnosis"))
             format_to_save = request.query_params.get(
                 "format_to_save"
             )  # Default to 'word'
@@ -515,7 +567,12 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 )
 
             get_use_case = GetUseCases(self.diagnosis_repository)
-            diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+            if diagnosis_id > 0:
+                diagnosis = get_use_case.get_by_id(diagnosis_id)
+            else:
+                diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
+                    company.id
+                )
             vehicle_questions = VehicleQuestions.objects.all()
             driver_questions = DriverQuestion.objects.all()
             fleet_data = Fleet.objects.filter(diagnosis=diagnosis.id)
@@ -567,10 +624,10 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 "{{COMPANY_NAME}}": company.name.upper(),
                 "{{NIT}}": format_nit(company.nit),
                 "{{MES_ANNO}}": f"{month.upper()} {year}",
-                "{{CONSULTOR_NOMBRE}}": f"{company.consultor.first_name.upper()} {company.consultor.last_name.upper()}",
+                "{{CONSULTOR_NOMBRE}}": f"{diagnosis.consultor.first_name.upper()} {diagnosis.consultor.last_name.upper()}",
                 "{{LICENCIA_SST}}": (
-                    company.consultor.licensia_sst
-                    if company.consultor.licensia_sst is not None
+                    diagnosis.consultor.licensia_sst
+                    if diagnosis.consultor.licensia_sst is not None
                     else "SIN LICENCIA"
                 ),
                 "{{TABLA_DIAGNOSTICO}}": "",
@@ -580,7 +637,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 "{{ACTUAR_TABLE}}": "",
                 "{{MISIONALIDAD_ID}}": str(company.mission.id),
                 "{{MISIONALIDAD_NAME}}": company.mission.name.upper(),
-                "{{NIVEL_PESV}}": company.size.name.upper(),
+                "{{NIVEL_PESV}}": diagnosis.type.name.upper(),
                 "{{QUANTITY_VEHICLES}}": str(total_general_vehicles),
                 "{{QUANTITY_DRIVERS}}": str(total_quantity_driver),
                 "{{CONCLUSIONES_TABLE}}": "",
@@ -612,7 +669,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 fleet_data,
                 driver_questions,
                 driver_data,
-                company.size.name.upper(),
+                diagnosis.type.name.upper(),
                 str(company.segment.name),
                 f"{company.dependant} - {company.dependant_position}".upper(),
                 company.acquired_certification or "",
@@ -636,7 +693,10 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 insert_table_results(doc, placeholders[f_cycle], filtered_data)
 
             insert_table_conclusion(
-                doc, "{{CONCLUSIONES_TABLE}}", datas_by_cycle, company.size.name.upper()
+                doc,
+                "{{CONCLUSIONES_TABLE}}",
+                datas_by_cycle,
+                diagnosis.type.name.upper(),
             )
             # insert_table_conclusion_articulated(
             #     doc, "{{ARTICULED_TABLE}}", datas_by_cycle, company.size.name.upper()
@@ -734,6 +794,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     @action(detail=False)
     def radarChart(self, request: Request):
         company_id = request.query_params.get("company_id")
+        diagnosis_id = int(request.query_params.get("diagnosis"))
         try:
             company = self.company_service.get_company(company_id)
         except Company.DoesNotExist:
@@ -742,7 +803,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
         get_use_case = GetUseCases(self.diagnosis_repository)
-        diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+        if diagnosis_id > 0:
+            diagnosis = get_use_case.get_by_id(diagnosis_id)
+        else:
+            diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+
         datas_by_cycle = DiagnosisService.calculate_completion_percentage(diagnosis.id)
         radar_data = [
             {
@@ -756,6 +821,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     @action(detail=False)
     def tableReport(self, request: Request):
         company_id = request.query_params.get("company_id")
+        diagnosis_id = int(request.query_params.get("diagnosis"))
         try:
             company = self.company_service.get_company(company_id)
         except Company.DoesNotExist:
@@ -764,13 +830,18 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
         get_use_case = GetUseCases(self.diagnosis_repository)
-        diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+        if diagnosis_id > 0:
+            diagnosis = get_use_case.get_by_id(diagnosis_id)
+        else:
+            diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+
         datas_by_cycle = DiagnosisService.calculate_completion_percentage(diagnosis.id)
         return Response(datas_by_cycle, status=status.HTTP_200_OK)
 
     @action(detail=False)
     def tableReportTotal(self, request: Request):
         company_id = request.query_params.get("company_id")
+        diagnosis_id = int(request.query_params.get("diagnosis"))
         try:
             company = self.company_service.get_company(company_id)
         except Company.DoesNotExist:
@@ -779,7 +850,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
         get_use_case = GetUseCases(self.diagnosis_repository)
-        diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+        if diagnosis_id > 0:
+            diagnosis = get_use_case.get_by_id(diagnosis_id)
+        else:
+            diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
+
         datas_by_cycle = DiagnosisService.calculate_completion_percentage(diagnosis.id)
 
         compliance_counts = (
@@ -802,6 +877,12 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             {"counts": compliance_counts, "general": general_percentage},
             status=status.HTTP_200_OK,
         )
+
+    def get_queryset(self):
+        diagnosis_id = self.request.query_params.get("diagnosis")
+        if diagnosis_id is not None:
+            return Diagnosis.objects.filter(pk=diagnosis_id)
+        return Diagnosis.objects.all()
 
 
 @api_view(["POST"])

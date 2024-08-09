@@ -1,29 +1,19 @@
 from datetime import datetime
 from docx import Document
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, RGBColor
 from docx.oxml import OxmlElement
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.style import WD_STYLE
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
 from docx.table import _Cell
 import numpy as np
 import matplotlib.pyplot as plt
 from io import BytesIO
 import openpyxl
 from openpyxl.chart import BarChart, Reference
-from openpyxl.drawing.image import Image
 import pandas as pd
-import subprocess
 import os
-import pypandoc
-import tempfile
-import pdfkit
 import base64
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-
+from tempfile import NamedTemporaryFile
+from docx2pdf import convert
 
 def align_cell_text(cell, horizontal="center", vertical="center"):
     """
@@ -1033,22 +1023,24 @@ def create_bar_chart(datas_by_cycle):
 
 
 def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
-    from docx2pdf import convert
+    
+    with NamedTemporaryFile(suffix=".docx", delete=False) as temp_docx_file:
+        temp_docx_file.write(docx_bytes)
+        temp_docx_name = temp_docx_file.name
+        
+    with NamedTemporaryFile(suffix=".pdf", delete=False) as temp_pdf_file:
+        temp_pdf_name = temp_pdf_file.name
+        
 
-    # Leer el contenido del archivo DOCX
-    with BytesIO(docx_bytes) as docx_buffer:
-        # Guardar el contenido DOCX en un archivo temporal
-        with open("temp.docx", "wb") as temp_docx_file:
-            temp_docx_file.write(docx_buffer.getvalue())
+    try:
+        convert(temp_docx_name, temp_pdf_name)
 
-    convert("temp.docx", "temp.pdf")
-    # Leer el contenido del archivo PDF y convertirlo a base64
-    with open("temp.pdf", "rb") as pdf_file:
-        pdf_content = pdf_file.read()
-        pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
-
-    # Limpiar archivos temporales
-    os.remove("temp.docx")
-    os.remove("temp.pdf")
+        with open(temp_pdf_name, "rb") as pdf_file:
+            pdf_content = pdf_file.read()
+            pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
+    finally:
+        # Ensure the files are cleaned up even if an error occurs
+        os.remove(temp_docx_name)
+        os.remove(temp_pdf_name)
 
     return pdf_base64

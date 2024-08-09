@@ -6,6 +6,7 @@ from apps.diagnosis_requirement.core.models import (
 from apps.diagnosis_requirement.infraestructure.serializers import (
     Diagnosis_RequirementSerializer,
 )
+from apps.sign.serializers import UserDetailSerializer
 
 
 class VehicleQuestionSerializer(serializers.ModelSerializer):
@@ -52,15 +53,62 @@ class Diagnosis_QuestionsSerializer(serializers.ModelSerializer):
         ]
 
 
+class Diagnosis_QuestionsChecklistSerializer(serializers.ModelSerializer):
+
+    compliance = serializers.PrimaryKeyRelatedField(
+        queryset=Compliance.objects.all(), write_only=True
+    )
+    compliance_detail = ComplianceSerializer(source="compliance", read_only=True)
+    requirement = serializers.PrimaryKeyRelatedField(
+        queryset=Diagnosis_Requirement.objects.all(), write_only=True
+    )
+    requirement_detail = Diagnosis_RequirementSerializer(
+        source="requirement", read_only=True
+    )
+
+    class Meta:
+        model = Diagnosis_Questions
+        fields = [
+            "id",
+            "name",
+            "variable_value",
+            "requirement",
+            "requirement_detail",
+            "compliance_detail",
+            "compliance",
+        ]
+
+
+class CompanySizeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanySize
+        fields = ["id", "name"]
+
+
 class DiagnosisSerializer(serializers.ModelSerializer):
+
+    type = CompanySizeSerializer(read_only=True)
     # company = serializers.PrimaryKeyRelatedField(
     #     queryset=Company.objects.all(), write_only=True
     # )
     # company_detail = CompanySerializer(source="company", read_only=True)
+    consultor = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), write_only=True
+    )
+    consultor_detail = UserDetailSerializer(source="consultor", read_only=True)
 
     class Meta:
         model = Diagnosis
-        fields = ["id", "company", "date_elabored"]
+        fields = [
+            "id",
+            "company",
+            "date_elabored",
+            "is_finalized",
+            "diagnosis_step",
+            "type",
+            "consultor",
+            "consultor_detail",
+        ]
         extra_kwargs = {"date_elabored": {"allow_null": True, "required": False}}
 
 

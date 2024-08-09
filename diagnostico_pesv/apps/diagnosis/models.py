@@ -1,7 +1,8 @@
 from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
 from apps.diagnosis_requirement.core.models import Diagnosis_Requirement
-from apps.company.models import Company
+from apps.company.models import Company, CompanySize
+from apps.sign.models import User
 
 
 class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico
@@ -37,10 +38,19 @@ class Diagnosis(SoftDeletes, Timestampable):
         blank=False,
         related_name="company_diagnosis",
     )
+    type = models.ForeignKey(
+        CompanySize,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=False,
+        related_name="diagnosis_type",
+    )
     date_elabored = models.DateField(null=False, blank=False, unique=True)
     is_finalized = models.BooleanField(default=False, null=False)
     schedule = models.CharField(null=True, blank=False, max_length=100)
     sequence = models.CharField(null=True, blank=False, max_length=100)
+    diagnosis_step = models.IntegerField(null=False, default=0)
+    consultor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
 
 class CheckList(SoftDeletes, Timestampable):
@@ -48,7 +58,7 @@ class CheckList(SoftDeletes, Timestampable):
         Diagnosis_Questions, on_delete=models.SET_NULL, null=True, blank=False
     )
     diagnosis = models.ForeignKey(
-        Diagnosis, on_delete=models.SET_NULL, null=True, blank=False
+        Diagnosis, on_delete=models.CASCADE, null=True, blank=False
     )
     compliance = models.ForeignKey(
         Compliance, on_delete=models.SET_NULL, null=True, blank=False

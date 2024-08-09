@@ -51,11 +51,7 @@ class Company(SoftDeletes, Timestampable):
     dependant_phone = models.CharField(max_length=20, null=True)
     email = models.CharField(max_length=200, null=True)
     acquired_certification = models.CharField(max_length=255, null=True)
-    consultor = models.OneToOneField(
-        User, on_delete=models.SET_NULL, null=True, unique=True
-    )
     mission = models.ForeignKey(Mission, on_delete=models.CASCADE, null=True)
-    diagnosis_step = models.IntegerField(null=False, default=0)
     arl = models.ForeignKey(Arl, on_delete=models.SET_NULL, null=True, blank=False)
     size = models.ForeignKey(
         CompanySize, on_delete=models.SET_NULL, null=True, blank=False

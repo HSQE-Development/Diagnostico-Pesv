@@ -87,11 +87,6 @@ class CompanySerializer(serializers.ModelSerializer):
     )
     segment_detail = SegmentSerializer(source="segment", read_only=True)
 
-    consultor = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), write_only=True
-    )
-    consultor_detail = UserDetailSerializer(source="consultor", read_only=True)
-
     mission = serializers.PrimaryKeyRelatedField(
         queryset=Mission.objects.all(), write_only=True
     )
@@ -127,11 +122,8 @@ class CompanySerializer(serializers.ModelSerializer):
             "dependant_phone",
             "email",
             "acquired_certification",
-            "consultor",
-            "consultor_detail",
             "mission",
             "mission_detail",
-            "diagnosis_step",
             "arl",
             "arl_detail",
             "misionality_size_criteria",

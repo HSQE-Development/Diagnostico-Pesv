@@ -28,6 +28,10 @@ class DiagnosisRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    def get_by_id(self, diagnosis_id: int) -> Diagnosis:
+        pass
+
+    @abstractmethod
     def get_by_date_elabored(self, date_elabored) -> Diagnosis:
         pass
 

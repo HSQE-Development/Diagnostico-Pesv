@@ -99,32 +99,85 @@ class DiagnosisService:
         return result
 
     @staticmethod
-    def group_questions_by_step(checklist_requirements, requirements):
+    def group_questions_by_step(
+        checklist_requirements,
+        requirements,
+        checklist_questions=None,
+        include_compliance=False,
+    ):
+
         requirements_dict = defaultdict(list)
         for requirement in requirements:
             requirements_dict[requirement.id] = list(requirement.requirements.all())
+
         result = []
+
+        if include_compliance and checklist_questions is not None:
+            question_compliance_dict = {
+                q.question_id: q.compliance for q in checklist_questions
+            }
+        else:
+            question_compliance_dict = {}
+
         for cr in checklist_requirements:
             requirement = cr.requirement
             compliance = cr.compliance
             questions = requirements_dict.get(requirement.id, [])
-
-            result.append(
-                {
-                    "id": cr.id,
-                    "step": requirement.step,
-                    "cycle": requirement.cycle,
-                    "observation": cr.observation,
-                    "requirement_name": requirement.name,
-                    "compliance": {
-                        "id": compliance.id,
-                        "name": compliance.name,
-                    },
-                    "questions": Diagnosis_QuestionsSerializer(
-                        questions, many=True
-                    ).data,
-                }
-            )
+            # Incluye el cumplimiento de las preguntas si corresponde
+            if include_compliance:
+                questions_with_compliance = [
+                    {
+                        **question.__dict__,  # Incluye los atributos de la pregunta
+                        "compliance": {
+                            "id": (
+                                question_compliance_dict.get(question.id, None).id
+                                if question_compliance_dict.get(question.id)
+                                else None
+                            ),
+                            "name": (
+                                question_compliance_dict.get(question.id, None).name
+                                if question_compliance_dict.get(question.id)
+                                else None
+                            ),
+                        },
+                        "requirement": question.requirement,
+                    }
+                    for question in questions
+                ]
+                result.append(
+                    {
+                        "id": cr.id,
+                        "step": requirement.step,
+                        "cycle": requirement.cycle,
+                        "observation": cr.observation,
+                        "requirement_name": requirement.name,
+                        "compliance": {
+                            "id": compliance.id,
+                            "name": compliance.name,
+                        },
+                        "questions": Diagnosis_QuestionsChecklistSerializer(
+                            questions_with_compliance, many=True
+                        ).data,
+                    }
+                )
+            else:
+                questions_with_compliance = questions
+                result.append(
+                    {
+                        "id": cr.id,
+                        "step": requirement.step,
+                        "cycle": requirement.cycle,
+                        "observation": cr.observation,
+                        "requirement_name": requirement.name,
+                        "compliance": {
+                            "id": compliance.id,
+                            "name": compliance.name,
+                        },
+                        "questions": Diagnosis_QuestionsSerializer(
+                            questions_with_compliance, many=True
+                        ).data,
+                    }
+                )
         return result
 
     @staticmethod
@@ -171,9 +224,13 @@ class DiagnosisService:
         )
 
     @staticmethod
-    def build_success_response(vehicle_data, driver_data):
+    def build_success_response(vehicle_data, driver_data, diagnosis):
         return Response(
-            {"vehicleData": vehicle_data, "driverData": driver_data},
+            {
+                "vehicleData": vehicle_data,
+                "driverData": driver_data,
+                "diagnosis": diagnosis.id,
+            },
             status=status.HTTP_201_CREATED,
         )
 
