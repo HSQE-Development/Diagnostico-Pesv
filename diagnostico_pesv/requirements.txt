@@ -25,6 +25,7 @@ et-xmlfile==1.1.0
 Faker==26.0.0
 fields==5.0.0
 fonttools==4.53.1
+gunicorn==23.0.0
 kiwisolver==1.4.5
 kombu==5.3.7
 lxml==5.2.2
