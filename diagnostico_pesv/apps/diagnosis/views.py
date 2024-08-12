@@ -45,7 +45,6 @@ from enum import Enum
 from django.db.models import Value, Case, CharField, When
 from .services import DiagnosisService
 from django.core.exceptions import ObjectDoesNotExist
-import pythoncom
 from rest_framework import status, viewsets
 from http import HTTPMethod
 from apps.company.service import CompanyService
@@ -551,8 +550,6 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=[HTTPMethod.POST])
     def generateReport(self, request: Request):
         try:
-            pythoncom.CoInitialize()
-
             company_id = request.query_params.get("company")
             diagnosis_id = int(request.query_params.get("diagnosis"))
             format_to_save = request.query_params.get(
