@@ -100,7 +100,7 @@ DATABASES = {
         "OPTIONS": {"init_command": "SET sql_mode='STRICT_TRANS_TABLES'"},
     }
 }
-
+print(f"Contraseña desde variable de entorno: {os.getenv('DB_PASSWORD')}")
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
