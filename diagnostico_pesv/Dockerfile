@@ -11,11 +11,9 @@ WORKDIR /app
 # Copia los archivos de requisitos al contenedor
 COPY requirements.txt .
 
-# Actualiza la lista de paquetes y arregla problemas de red
-RUN sed -i 's/deb.debian.org/ftp.debian.org/' /etc/apt/sources.list && \
-    apt-get update && \
+# Actualiza la lista de paquetes y arregla problemas de red, instala wget y descarga wait-for-it.sh
+RUN apt-get update && \
     apt-get install -y wget && \
-    # Descarga wait-for-it.sh
     wget https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -O /usr/local/bin/wait-for-it.sh && \
     chmod +x /usr/local/bin/wait-for-it.sh
 
