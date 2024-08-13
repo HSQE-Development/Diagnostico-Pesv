@@ -94,13 +94,12 @@ DATABASES = {
         "USER": os.getenv("DB_USER"),  # Usuario de MySQL
         "PASSWORD": os.getenv("DB_PASSWORD"),  # Contraseña de MySQL
         "HOST": os.getenv(
-            "DB_HOST"
+            "DB_HOST", "db"
         ),  # Host donde se encuentra la base de datos (usualmente 'localhost')
         "PORT": os.getenv("DB_PORT"),  # Puerto de MySQL (por defecto es 3306)
         "OPTIONS": {"init_command": "SET sql_mode='STRICT_TRANS_TABLES'"},
     }
 }
-print(f"Contraseña desde variable de entorno: {os.getenv('DB_PASSWORD')}")
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
