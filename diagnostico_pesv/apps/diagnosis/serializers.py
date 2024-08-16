@@ -87,7 +87,10 @@ class CompanySizeSerializer(serializers.ModelSerializer):
 
 class DiagnosisSerializer(serializers.ModelSerializer):
 
-    type = CompanySizeSerializer(read_only=True)
+    type = serializers.PrimaryKeyRelatedField(
+        queryset=CompanySize.objects.all(), write_only=True
+    )
+    type_detail = CompanySizeSerializer(source="type", read_only=True)
     # company = serializers.PrimaryKeyRelatedField(
     #     queryset=Company.objects.all(), write_only=True
     # )
@@ -106,8 +109,13 @@ class DiagnosisSerializer(serializers.ModelSerializer):
             "is_finalized",
             "diagnosis_step",
             "type",
+            "type_detail",
             "consultor",
             "consultor_detail",
+            "mode_ejecution",
+            "schedule",
+            "sequence",
+            "observation",
         ]
         extra_kwargs = {"date_elabored": {"allow_null": True, "required": False}}
 

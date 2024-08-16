@@ -31,6 +31,11 @@ class Compliance(SoftDeletes, Timestampable):
 
 
 class Diagnosis(SoftDeletes, Timestampable):
+    MODOS = [
+        ("presencial", "Presencial"),
+        ("virtual", "Virtual"),
+    ]
+
     company = models.ForeignKey(
         Company,
         on_delete=models.SET_NULL,
@@ -51,6 +56,10 @@ class Diagnosis(SoftDeletes, Timestampable):
     sequence = models.CharField(null=True, blank=False, max_length=100)
     diagnosis_step = models.IntegerField(null=False, default=0)
     consultor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    mode_ejecution = models.CharField(
+        max_length=100, choices=MODOS, default="presencial"
+    )
+    observation = models.TextField(blank=False, null=True)
 
 
 class CheckList(SoftDeletes, Timestampable):

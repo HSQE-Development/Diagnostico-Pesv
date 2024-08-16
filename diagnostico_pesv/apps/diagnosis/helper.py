@@ -15,6 +15,7 @@ import base64
 from tempfile import NamedTemporaryFile
 from docx2pdf import convert
 
+
 def align_cell_text(cell, horizontal="center", vertical="center"):
     """
     Aligns text in a cell both horizontally and vertically.
@@ -614,6 +615,7 @@ def insert_table_recomendations(
 
             # Insertar datos por ciclo
             for item in recomendaciones_agrupadas:
+
                 ciclo = VALID_STEPS.get(item["cycle"].upper(), "Otros").upper()
                 recomendaciones = item["recomendations"]
                 row = table.add_row().cells
@@ -635,8 +637,11 @@ def insert_table_recomendations(
                 cell.paragraphs[0].clear()  # Limpiar cualquier texto existente
 
                 for recomendacion in recomendaciones:
-                    p = cell.add_paragraph(recomendacion)
+                    p = cell.add_paragraph(recomendacion["recomendacion"])
                     apply_bullets(p)
+                    if recomendacion["observation"]:
+                        p2 = cell.add_paragraph(recomendacion["observation"])
+                        apply_bullets(p2)  # Aplicar viñetas al segundo párrafo
                 row[0].merge(row[5])
                 for cell in row:
                     bottom_border = OxmlElement("w:bottom")
@@ -884,7 +889,7 @@ def insert_table_conclusion_percentage_articuled(
             )
             title_row[0].merge(title_row[1])
             align_cell_text(title_row[0], "center", "center")
-            
+
             # title_row[1].text = str(count_cumple)  # Cumple
             title_row[2].text = str(count_no_cumple)  # No Cumple
             title_row[2].merge(title_row[3])
@@ -915,19 +920,24 @@ def insert_table_conclusion_percentage(
                 align_cell_text(cell, "left", "center")
                 set_cell_background_color(cell, "2f4858")
                 set_cell_text_color(cell)
-            total_items = (
-                counts[0]["count"]
-                + counts[1]["count"]
-                + counts[2]["count"]
-                + counts[3]["count"]
-            )
 
             title_row = table.add_row().cells
+
+            for compliance in counts:
+                compliance_id = compliance.id
+                count = compliance.count if compliance.count is not None else 0
+
+                # Asigna el valor en la celda correspondiente en tu tabla
+                if compliance_id == 1:  # Cumple
+                    title_row[1].text = str(count)
+                elif compliance_id == 2:  # No Cumple
+                    title_row[2].text = str(count)
+                elif compliance_id == 3:  # Cumple Parcialmente
+                    title_row[3].text = str(count)
+                elif compliance_id == 4:  # No Aplica
+                    title_row[4].text = str(count)
+            total_items = sum(int(title_row[i].text) for i in range(1, 5))
             title_row[0].text = str(total_items)
-            title_row[1].text = str(counts[0]["count"])  # Cumple
-            title_row[2].text = str(counts[1]["count"])  # No Cumple
-            title_row[3].text = str(counts[2]["count"])  # Cumple Parcialmente
-            title_row[4].text = str(counts[3]["count"])  # No Aplica
             title_row[5].text = f"{perecentaje}%"
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
@@ -1023,14 +1033,13 @@ def create_bar_chart(datas_by_cycle):
 
 
 def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
-    
+
     with NamedTemporaryFile(suffix=".docx", delete=False) as temp_docx_file:
         temp_docx_file.write(docx_bytes)
         temp_docx_name = temp_docx_file.name
-        
+
     with NamedTemporaryFile(suffix=".pdf", delete=False) as temp_pdf_file:
         temp_pdf_name = temp_pdf_file.name
-        
 
     try:
         convert(temp_docx_name, temp_pdf_name)
@@ -1044,3 +1053,11 @@ def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
         os.remove(temp_pdf_name)
 
     return pdf_base64
+
+
+
+def calculate_obtained_value(num_questions):
+    if num_questions == 0:
+        return 0
+    # Supongamos que cada pregunta vale un punto
+    return num_questions

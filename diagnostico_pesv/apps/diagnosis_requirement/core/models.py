@@ -1,6 +1,7 @@
 from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
 from apps.sign.models import User
+from apps.company.models import CompanySize
 
 
 # Create your models here.
@@ -18,3 +19,7 @@ class Recomendation(SoftDeletes, Timestampable):
     requirement = models.ForeignKey(
         Diagnosis_Requirement, on_delete=models.SET_NULL, null=True
     )
+    basic = models.BooleanField(default=False, null=False, blank=False)
+    standard = models.BooleanField(default=False, null=False, blank=False)
+    advanced = models.BooleanField(default=False, null=False, blank=False)
+    all = models.BooleanField(default=False, null=False, blank=False)

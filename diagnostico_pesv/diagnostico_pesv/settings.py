@@ -94,7 +94,7 @@ DATABASES = {
         "USER": os.getenv("DB_USER"),  # Usuario de MySQL
         "PASSWORD": os.getenv("DB_PASSWORD"),  # Contraseña de MySQL
         "HOST": os.getenv(
-            "DB_HOST", "db"
+            "DB_HOST"
         ),  # Host donde se encuentra la base de datos (usualmente 'localhost')
         "PORT": os.getenv("DB_PORT"),  # Puerto de MySQL (por defecto es 3306)
         "OPTIONS": {"init_command": "SET sql_mode='STRICT_TRANS_TABLES'"},

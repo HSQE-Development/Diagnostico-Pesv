@@ -49,7 +49,7 @@ class CompanyService:
                 )
 
                 # Si cualquiera de las condiciones es verdadera, devolver el tamaño correspondiente
-                if vehicle_in_range and driver_in_range:
+                if vehicle_in_range or driver_in_range:
                     return criteria.size.id
 
             raise ValueError(

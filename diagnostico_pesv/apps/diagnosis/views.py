@@ -1,5 +1,10 @@
+import platform
 import traceback
 import re
+import base64
+import pandas as pd
+import os
+import traceback
 from rest_framework.decorators import (
     api_view,
     authentication_classes,
@@ -10,8 +15,6 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
-import base64
-import pandas as pd
 from apps.diagnosis_requirement.core.models import Diagnosis_Requirement, Recomendation
 from apps.diagnosis_requirement.infraestructure.serializers import (
     Recomendation_Serializer,
@@ -30,19 +33,16 @@ from .serializers import (
     DriverSerializer,
     DiagnosisSerializer,
 )
-from apps.company.models import Company
+from apps.company.models import Company, CompanySize
 from apps.diagnosis.models import Fleet, Driver
 from utils.functionUtils import blank_to_null
 from django.db import transaction
 from docx import Document
 from io import BytesIO
-import os
 from django.conf import settings
 from .helper import *
 from django.db.models import Sum, Count
 from collections import defaultdict
-from enum import Enum
-from django.db.models import Value, Case, CharField, When
 from .services import DiagnosisService
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status, viewsets
@@ -56,15 +56,45 @@ from apps.diagnosis_requirement.application.use_cases import (
 from apps.diagnosis_requirement.infraestructure.repositories import (
     DiagnosisRequirementRepository,
 )
-import traceback
-from django.db.models import Prefetch
+from django.db.models import Prefetch, OuterRef, Subquery, Q
 from apps.sign.models import User
+from utils.constants import ComplianceIds
 
 
-class CompanySizeEnum(Enum):
-    AVANZADO = 3
-    ESTANDAR = 2
-    BASICO = 1
+def remove_invalid_requirements(diagnosis_id, valid_requirements):
+    try:
+        # Determinar el campo de Diagnosis_Requirement basado en type_id
+
+        # Obtener los IDs de los requisitos válidos según el tipo
+        valid_requirement_ids = set(valid_requirements.values_list("id", flat=True))
+
+        # Obtener los IDs de los requisitos que están en Checklist_Requirement para el diagnóstico específico
+        checklist_requirements_ids = Checklist_Requirement.objects.filter(
+            diagnosis_id=diagnosis_id
+        ).values_list("requirement_id", flat=True)
+
+        # Identificar los requisitos en Checklist_Requirement que no son válidos según el tipo actual
+        invalid_requirements = set(checklist_requirements_ids) - valid_requirement_ids
+
+        # Eliminar los requisitos inválidos
+        if invalid_requirements:
+            with transaction.atomic():
+                Checklist_Requirement.objects.filter(
+                    diagnosis_id=diagnosis_id, requirement_id__in=invalid_requirements
+                ).delete(hard=True)
+
+                questions = Diagnosis_Questions.objects.filter(
+                    requirement_id__in=invalid_requirements
+                )
+                for question in questions:
+                    CheckList.objects.filter(
+                        question_id=question.id, diagnosis_id=diagnosis_id
+                    ).delete(hard=True)
+
+    except CompanySize.DoesNotExist:
+        print("CompanySize no encontrado.")
+    except Exception as e:
+        print(f"Ocurrió un error: {e}")
 
 
 class DiagnosisViewSet(viewsets.ModelViewSet):
@@ -209,6 +239,83 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(detail=False, methods=[HTTPMethod.PATCH])
+    def update_diagnosis(self, request: Request):
+        diagnosis_id = request.query_params.get("diagnosis")
+        type_id = request.data.get("type")
+        observation = request.data.get("observation")
+        try:
+            with transaction.atomic():
+                get_use_case = GetUseCases(self.diagnosis_repository)
+                diagnosis = get_use_case.get_by_id(diagnosis_id)
+
+                if type_id:
+                    typeObject = CompanySize.objects.get(pk=type_id)
+                    diagnosis.type = typeObject
+                    # Determinar el campo de Diagnosis_Requirement basado en type_id
+                    if typeObject.id == 1:
+                        requirements = Diagnosis_Requirement.objects.filter(basic=True)
+                    elif typeObject.id == 2:
+                        requirements = Diagnosis_Requirement.objects.filter(
+                            standard=True
+                        )
+                    elif typeObject.id == 3:
+                        requirements = Diagnosis_Requirement.objects.filter(
+                            advanced=True
+                        )
+                    else:
+                        raise ValueError("Invalid type_id provided.")
+
+                    checklist_requirements_ids = Checklist_Requirement.objects.filter(
+                        diagnosis=diagnosis.id
+                    ).values_list("requirement_id", flat=True)
+
+                    existing_requirement_ids = set(
+                        requirements.values_list("id", flat=True)
+                    )
+                    checklist_requirement_ids = set(checklist_requirements_ids)
+                    missing_requirements = (
+                        existing_requirement_ids - checklist_requirement_ids
+                    )
+                    get_compliance = GetComplianceById(self.compliance_repository, 2)
+                    compliance = get_compliance.execute()
+
+                    remove_invalid_requirements(
+                        diagnosis_id=diagnosis.id, valid_requirements=requirements
+                    )
+
+                    for requirement_id in missing_requirements:
+                        Checklist_Requirement.objects.create(
+                            diagnosis=diagnosis,
+                            requirement_id=requirement_id,
+                            compliance=compliance,  # Ajusta el valor según sea necesario
+                            observation=None,  # Ajusta el valor según sea necesario
+                        )
+
+                        questions = Diagnosis_Questions.objects.filter(
+                            requirement_id=requirement_id
+                        )
+                        for question in questions:
+                            CheckList.objects.create(
+                                question=question,
+                                compliance=compliance,
+                                diagnosis=diagnosis,
+                                obtained_value=0,
+                            )
+                    diagnosis.diagnosis_step = 1
+
+                if observation:
+                    diagnosis.observation = observation
+
+                diagnosis.save()
+
+                serializer = DiagnosisSerializer(diagnosis)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as ex:
+            return Response(
+                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=False, methods=[HTTPMethod.POST])
     def uploadDiagnosisQuestions(request: Request):
         data = request.data.get("diagnosis_questions")
@@ -278,7 +385,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         company_id = request.data.get("company")
         vehicle_data = request.data.get("vehicleData", [])
         driver_data = request.data.get("driverData", [])
-        diagnosis_data = {"company": company_id, "date_elabored": None}
+        diagnosis_data = {
+            "company": company_id,
+            "date_elabored": None,
+            "consultor": consultor_id,
+        }
         diagnosis_serializer = DiagnosisSerializer(data=diagnosis_data)
 
         if diagnosis_serializer.is_valid():
@@ -549,8 +660,19 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=[HTTPMethod.POST])
     def generateReport(self, request: Request):
+
+        # Solo intenta importar pythoncom si el sistema operativo es Windows
+        if platform.system() == "Windows":
+            try:
+                import pythoncom
+
+                pythoncom.CoInitialize()
+            except Exception as e:
+                print(f"Error al inicializar COM: {e}")
         try:
             company_id = request.query_params.get("company")
+            schedule = request.query_params.get("schedule")
+            sequence = request.query_params.get("sequence")
             diagnosis_id = int(request.query_params.get("diagnosis"))
             format_to_save = request.query_params.get(
                 "format_to_save"
@@ -570,6 +692,12 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
                     company.id
                 )
+            if schedule and sequence:
+                if sequence != diagnosis.sequence or schedule != diagnosis.schedule:
+                    diagnosis.schedule = schedule
+                    diagnosis.sequence = sequence
+                    diagnosis.save()
+
             vehicle_questions = VehicleQuestions.objects.all()
             driver_questions = DriverQuestion.objects.all()
             fleet_data = Fleet.objects.filter(diagnosis=diagnosis.id)
@@ -616,8 +744,8 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             doc = Document(template_path)
             month, year = get_current_month_and_year()
             variables_to_change = {
-                "{{CRONOGRAMA}}": "#######",
-                "{{SECUENCIA}}": "########",
+                "{{CRONOGRAMA}}": diagnosis.schedule,
+                "{{SECUENCIA}}": diagnosis.sequence,
                 "{{COMPANY_NAME}}": company.name.upper(),
                 "{{NIT}}": format_nit(company.nit),
                 "{{MES_ANNO}}": f"{month.upper()} {year}",
@@ -627,6 +755,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     if diagnosis.consultor.licensia_sst is not None
                     else "SIN LICENCIA"
                 ),
+                "{{MODE_PESV}}": diagnosis.mode_ejecution,
                 "{{TABLA_DIAGNOSTICO}}": "",
                 "{{PLANEAR_TABLE}}": "",
                 "{{HACER_TABLE}}": "",
@@ -701,15 +830,18 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             insert_table_conclusion_percentage_articuled(
                 doc, "{{TOTALS_ARTICULED}}", datas_by_cycle
             )
-            compliance_counts = (
-                CheckList.objects.filter(diagnosis=diagnosis.id)
-                .values("compliance_id")  # Agrupa por compliance_id
-                .annotate(
-                    count=Count("id")
-                )  # Cuenta la cantidad de registros en cada grupo
-                .order_by("compliance_id")  # Ordena por compliance_id
-            )
-
+            compliance_counts = Compliance.objects.annotate(
+                count=Subquery(
+                    CheckList.objects.filter(
+                        diagnosis=diagnosis.id, compliance_id=OuterRef("pk")
+                    )
+                    .values("compliance_id")
+                    .annotate(count=Count("id"))
+                    .values("count")
+                )
+            ).order_by(
+                "id"
+            )  # Ordena por compliance_id
             # Inicializar variables para calcular el porcentaje general
             total_percentage = 0.0
             num_cycles = len(datas_by_cycle)
@@ -737,34 +869,63 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             )
             # Definir el orden deseado para los ciclos
             orden_ciclos = ["P", "H", "V", "A"]
-            recomendaciones_agrupadas = (
-                Recomendation.objects.select_related("requirement")
-                .values("requirement__cycle", "name")
-                .annotate(
-                    ciclo_order=Case(
-                        *[
-                            When(requirement__cycle=ciclo, then=Value(i))
-                            for i, ciclo in enumerate(orden_ciclos)
-                        ],
-                        output_field=CharField(),
-                    )
-                )
-                .order_by("ciclo_order")
+
+            # Filtrar Checklist_Requirements por diagnosis_id
+            checklist_requirements = Checklist_Requirement.objects.filter(
+                diagnosis=diagnosis.id,
+                compliance__in=[
+                    ComplianceIds.NO_CUMPLE.value,
+                    ComplianceIds.NO_APLICA.value,
+                ],
+            ).select_related("requirement")
+
+            requirement_ids = checklist_requirements.values_list(
+                "requirement_id", flat=True
             )
 
+            observaciones_por_requirement = {
+                checklist.requirement_id: f"PASO {checklist.requirement.step}: {checklist.observation}"
+                for checklist in checklist_requirements
+                if checklist.compliance.id == ComplianceIds.NO_APLICA.value
+            }
+            # Construir la condición para las recomendaciones basadas en el tipo de diagnóstico
+            if diagnosis.type.id == 1:  # Supongamos que 1 es 'basic'
+                filtro_tipo = Q(basic=True)
+            elif diagnosis.type.id == 2:  # Supongamos que 2 es 'standard'
+                filtro_tipo = Q(standard=True)
+            elif diagnosis.type.id == 3:  # Supongamos que 3 es 'advanced'
+                filtro_tipo = Q(advanced=True)
+            else:
+                filtro_tipo = Q()  # Manejo de error o tipo desconocido
+
+            # Obtener observaciones y recomendaciones asociadas a los requirements de esos Checklist_Requirements
+            recomendaciones = Recomendation.objects.filter(
+                (filtro_tipo | Q(all=True)) & Q(requirement_id__in=requirement_ids)
+            ).select_related("requirement")
+
             # Crear un diccionario para almacenar las recomendaciones agrupadas por cycle
-            recomendaciones_por_cycle = defaultdict(list)
+            resultados_por_cycle = defaultdict(list)
+            for recomendacion in recomendaciones:
+                cycle = recomendacion.requirement.cycle
+                nombre_recomendacion = recomendacion.name
 
-            for item in recomendaciones_agrupadas:
-                cycle = item["requirement__cycle"]
-                nombre_recomendacion = item["name"]
-                recomendaciones_por_cycle[cycle].append(nombre_recomendacion)
+                # Crear una clave única para evitar duplicados
+                observation = observaciones_por_requirement.get(
+                    recomendacion.requirement_id, ""
+                )
 
+                resultados_por_cycle[cycle].append(
+                    {
+                        "recomendacion": nombre_recomendacion,
+                        "observation": observation,
+                    }
+                )
+
+            # Convertir los resultados agrupados en una lista final
             resultado_final = [
-                {"cycle": cycle, "recomendations": recomendaciones}
-                for cycle, recomendaciones in recomendaciones_por_cycle.items()
+                {"cycle": cycle, "recomendations": recomendacion}
+                for cycle, recomendacion in resultados_por_cycle.items()
             ]
-
             variables_to_change["{{PERCENTAGE_TOTAL}}"] = str(general_percentage)
             insert_table_recomendations(doc, "{{RECOMENDATIONS}}", resultado_final)
             replace_placeholders_in_document(doc, variables_to_change)
