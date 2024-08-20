@@ -240,3 +240,11 @@ class DriverSerializer(serializers.ModelSerializer):
         )
 
         return driver_instance
+
+
+class ComplianceCountSerializer(serializers.ModelSerializer):
+    count = serializers.IntegerField()
+
+    class Meta:
+        model = Compliance
+        fields = ["id", "name", "count"]

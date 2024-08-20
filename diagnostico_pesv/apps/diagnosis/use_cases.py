@@ -77,6 +77,18 @@ class GetRequirementById:
         return self.repository.get_requirement_by_id(self.id)
 
 
+class CheckListMassiveDelete:
+    def __init__(
+        self, repository: CheckListRequirementRepositoryInterface, ids_to_delete
+    ):
+        self.repository = repository
+        self.ids_to_delete = ids_to_delete
+
+    def execute(self):
+        # Pasar los datos del diccionario al repositorio
+        return self.repository.massive_delete(self.ids_to_delete)
+
+
 class GetCheckListByQuestionIdAndDiagnosisId:
     def __init__(
         self,

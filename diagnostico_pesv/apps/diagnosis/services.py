@@ -13,6 +13,36 @@ class DiagnosisService:
     date_elabored = None
 
     @staticmethod
+    def calculate_total_variable_value(checklists):
+        total = 0
+        for checklist in checklists:
+            total += checklist.question.variable_value
+        return total
+
+    @staticmethod
+    def calculate_total_obtained_value(checklists):
+        total = 0
+        for checklist in checklists:
+            total += checklist.obtained_value
+        return total
+
+    @staticmethod
+    def calculate_completion_percentage_data(diagnosis_id):
+        service_instance = DiagnosisService()
+        # Obtén los CheckList relacionados con el diagnostico
+        checklists_questions = CheckList.objects.filter(diagnosis=diagnosis_id)
+
+        total_value_variable = service_instance.calculate_total_variable_value(
+            checklists_questions
+        )
+        total_obtained_value = service_instance.calculate_total_obtained_value(
+            checklists_questions
+        )
+
+        percentage = round((total_obtained_value / total_value_variable) * 100, 2)
+        return percentage
+
+    @staticmethod
     def calculate_completion_percentage(diagnosis_id):
         # Obtén los CheckList relacionados con el diagnostico
         checklists = CheckList.objects.filter(diagnosis=diagnosis_id).select_related(

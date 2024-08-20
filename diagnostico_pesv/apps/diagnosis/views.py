@@ -67,28 +67,24 @@ def remove_invalid_requirements(diagnosis_id, valid_requirements):
 
         # Obtener los IDs de los requisitos válidos según el tipo
         valid_requirement_ids = set(valid_requirements.values_list("id", flat=True))
-
         # Obtener los IDs de los requisitos que están en Checklist_Requirement para el diagnóstico específico
         checklist_requirements_ids = Checklist_Requirement.objects.filter(
             diagnosis_id=diagnosis_id
         ).values_list("requirement_id", flat=True)
-
         # Identificar los requisitos en Checklist_Requirement que no son válidos según el tipo actual
         invalid_requirements = set(checklist_requirements_ids) - valid_requirement_ids
-
         # Eliminar los requisitos inválidos
         if invalid_requirements:
             with transaction.atomic():
                 Checklist_Requirement.objects.filter(
-                    diagnosis_id=diagnosis_id, requirement_id__in=invalid_requirements
+                    diagnosis=diagnosis_id, requirement_id__in=invalid_requirements
                 ).delete(hard=True)
-
                 questions = Diagnosis_Questions.objects.filter(
                     requirement_id__in=invalid_requirements
                 )
                 for question in questions:
                     CheckList.objects.filter(
-                        question_id=question.id, diagnosis_id=diagnosis_id
+                        question_id=question.id, diagnosis=diagnosis_id
                     ).delete(hard=True)
 
     except CompanySize.DoesNotExist:
@@ -482,6 +478,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             diagnosisRequirementDto = diagnosis_data["diagnosisRequirementDto"]
             company_id = diagnosis_data["company"]
             consultor_id = diagnosis_data["consultor"]
+            diagnosis_id = int(request.query_params.get("diagnosis"))
 
             try:
                 company = self.company_service.get_company(company_id)
@@ -496,123 +493,119 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     {"error": "Consultor no encontrada."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-            with transaction.atomic():
-                get_use_case = GetUseCases(self.diagnosis_repository)
+            get_use_case = GetUseCases(self.diagnosis_repository)
+            if diagnosis_id > 0:
+                diagnosis = get_use_case.get_by_id(diagnosis_id)
+            else: 
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
                     company.id
                 )
+            with transaction.atomic():
                 questions_to_create = []
                 questions_to_update = []
                 for diagnosis_questions in diagnosisDto:
-                    # print(diagnosis)
-                    with transaction.atomic():
-                        question_id = diagnosis_questions["question"]
+                    question_id = diagnosis_questions["question"]
 
-                        get_question = GetQuestionById(
-                            self.diagnosis_question, question_id
+                    get_question = GetQuestionById(self.diagnosis_question, question_id)
+                    question = get_question.execute()
+                    get_checklist_by_question_and_diagnosis = (
+                        GetCheckListByQuestionIdAndDiagnosisId(
+                            self.checklist_repository, question.id, diagnosis.id
                         )
-                        question = get_question.execute()
-                        get_checklist_by_question_and_diagnosis = (
-                            GetCheckListByQuestionIdAndDiagnosisId(
-                                self.checklist_repository, question.id, diagnosis.id
-                            )
+                    )
+                    existing_checklist_by_question_and_diagnosis = (
+                        get_checklist_by_question_and_diagnosis.execute()
+                    )
+
+                    get_compliance = GetComplianceById(
+                        self.compliance_repository,
+                        diagnosis_questions["compliance"],
+                    )
+                    compliance = get_compliance.execute()
+
+                    newObservation = blank_to_null(diagnosis_questions["observation"])
+                    if newObservation is None:
+                        newObservation = "SIN OBSERVACIONES"
+                    newVerifyDocs = blank_to_null(
+                        diagnosis_questions["verify_document"]
+                    )
+
+                    if existing_checklist_by_question_and_diagnosis:
+                        existing_checklist_by_question_and_diagnosis.compliance = (
+                            compliance
                         )
-                        existing_checklist_by_question_and_diagnosis = (
-                            get_checklist_by_question_and_diagnosis.execute()
+                        existing_checklist_by_question_and_diagnosis.observation = (
+                            newObservation
+                        )
+                        existing_checklist_by_question_and_diagnosis.obtained_value = (
+                            diagnosis_questions["obtained_value"]
+                        )
+                        existing_checklist_by_question_and_diagnosis.is_articuled = (
+                            diagnosis_questions["is_articuled"]
+                        )
+                        existing_checklist_by_question_and_diagnosis.verify_document = (
+                            newVerifyDocs
+                        )
+                        questions_to_update.append(
+                            existing_checklist_by_question_and_diagnosis
                         )
 
-                        get_compliance = GetComplianceById(
-                            self.compliance_repository,
-                            diagnosis_questions["compliance"],
+                    else:
+                        new_Check_list = CheckList(
+                            compliance=compliance,
+                            observation=newObservation,
+                            obtained_value=diagnosis_questions["obtained_value"],
+                            is_articuled=diagnosis_questions["is_articuled"],
+                            verify_document=diagnosis_questions["verify_document"],
+                            diagnosis=diagnosis,
+                            question=question,
                         )
-                        compliance = get_compliance.execute()
-
-                        newObservation = blank_to_null(
-                            diagnosis_questions["observation"]
-                        )
-                        if newObservation is None:
-                            newObservation = "SIN OBSERVACIONES"
-                        newVerifyDocs = blank_to_null(
-                            diagnosis_questions["verify_document"]
-                        )
-
-                        if existing_checklist_by_question_and_diagnosis:
-                            existing_checklist_by_question_and_diagnosis.compliance = (
-                                compliance
-                            )
-                            existing_checklist_by_question_and_diagnosis.observation = (
-                                newObservation
-                            )
-                            existing_checklist_by_question_and_diagnosis.obtained_value = diagnosis_questions[
-                                "obtained_value"
-                            ]
-                            existing_checklist_by_question_and_diagnosis.is_articuled = diagnosis_questions[
-                                "is_articuled"
-                            ]
-                            existing_checklist_by_question_and_diagnosis.verify_document = (
-                                newVerifyDocs
-                            )
-                            questions_to_update.append(
-                                existing_checklist_by_question_and_diagnosis
-                            )
-
-                        else:
-                            new_Check_list = CheckList(
-                                compliance=compliance,
-                                observation=newObservation,
-                                obtained_value=diagnosis_questions["obtained_value"],
-                                is_articuled=diagnosis_questions["is_articuled"],
-                                verify_document=diagnosis_questions["verify_document"],
-                                diagnosis=diagnosis,
-                                question=question,
-                            )
-                            questions_to_create.append(new_Check_list)
+                        questions_to_create.append(new_Check_list)
 
                 checklists_to_create = []
                 checklists_to_update = []
                 for diagnosis_requirement in diagnosisRequirementDto:
-                    with transaction.atomic():
-                        req_id = diagnosis_requirement["requirement"]
+                    req_id = diagnosis_requirement["requirement"]
 
-                        get_cheklist_req_by_id_and_diagnosis = (
-                            GetCheckListRequirementByIdAndDiagnosisId(
-                                self.checklist_requirement_repository,
-                                int(req_id),
-                                diagnosis.id,
-                            )
+                    get_cheklist_req_by_id_and_diagnosis = (
+                        GetCheckListRequirementByIdAndDiagnosisId(
+                            self.checklist_requirement_repository,
+                            int(req_id),
+                            diagnosis.id,
                         )
-                        existing_cheklist_req_by_id_and_diagnosis = (
-                            get_cheklist_req_by_id_and_diagnosis.execute()
-                        )
-                        get_compliance = GetComplianceById(
-                            self.compliance_repository,
-                            diagnosis_requirement["compliance"],
-                        )
-                        compliance = get_compliance.execute()
+                    )
+                    existing_cheklist_req_by_id_and_diagnosis = (
+                        get_cheklist_req_by_id_and_diagnosis.execute()
+                    )
+                    get_compliance = GetComplianceById(
+                        self.compliance_repository,
+                        diagnosis_requirement["compliance"],
+                    )
+                    compliance = get_compliance.execute()
 
-                        use_case_get_requirement = GetRequirementById(
-                            self.checklist_requirement_repository, int(req_id)
-                        )
-                        requirement = use_case_get_requirement.execute()
+                    use_case_get_requirement = GetRequirementById(
+                        self.checklist_requirement_repository, int(req_id)
+                    )
+                    requirement = use_case_get_requirement.execute()
 
-                        if existing_cheklist_req_by_id_and_diagnosis:
-                            existing_cheklist_req_by_id_and_diagnosis.observation = (
-                                diagnosis_requirement["observation"]
-                            )
-                            existing_cheklist_req_by_id_and_diagnosis.compliance = (
-                                compliance
-                            )
-                            checklists_to_update.append(
-                                existing_cheklist_req_by_id_and_diagnosis
-                            )
-                        else:
-                            new_checklist = Checklist_Requirement(
-                                diagnosis=diagnosis,
-                                compliance=compliance,
-                                requirement=requirement,
-                                # Rellenar otros campos según sea necesario
-                            )
-                            checklists_to_create.append(new_checklist)
+                    if existing_cheklist_req_by_id_and_diagnosis:
+                        existing_cheklist_req_by_id_and_diagnosis.observation = (
+                            diagnosis_requirement["observation"]
+                        )
+                        existing_cheklist_req_by_id_and_diagnosis.compliance = (
+                            compliance
+                        )
+                        checklists_to_update.append(
+                            existing_cheklist_req_by_id_and_diagnosis
+                        )
+                    else:
+                        new_checklist = Checklist_Requirement(
+                            diagnosis=diagnosis,
+                            compliance=compliance,
+                            requirement=requirement,
+                            # Rellenar otros campos según sea necesario
+                        )
+                        checklists_to_create.append(new_checklist)
 
                 # Actualizar los requerimientos
                 if checklists_to_update:
@@ -621,11 +614,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     )
                     massive_update.execute()
 
-                if checklists_to_create:
-                    massive_create = CheckListRequirementMassiveCreate(
-                        self.checklist_requirement_repository, checklists_to_create
-                    )
-                    massive_create.execute()
+                # if checklists_to_create:
+                #     massive_create = CheckListRequirementMassiveCreate(
+                #         self.checklist_requirement_repository, checklists_to_create
+                #     )
+                #     massive_create.execute()
 
                 # Actualizar las preguntas
                 if questions_to_update:
@@ -634,11 +627,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     )
                     massive_update.execute()
 
-                if questions_to_create:
-                    massive_create = CheckListMassiveCreate(
-                        self.checklist_repository, questions_to_create
-                    )
-                    massive_create.execute()
+                # if questions_to_create:
+                #     massive_create = CheckListMassiveCreate(
+                #         self.checklist_repository, questions_to_create
+                #     )
+                #     massive_create.execute()
 
                 if not diagnosis.diagnosis_step == 2:
                     diagnosis.diagnosis_step = 2
@@ -804,6 +797,9 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             datas_by_cycle = DiagnosisService.calculate_completion_percentage(
                 diagnosis.id
             )
+            data_completion_percentage = (
+                DiagnosisService.calculate_completion_percentage_data(diagnosis.id)
+            )
             filter_cycles = ["P", "H", "V", "A"]
             placeholders = {
                 "P": "{{PLANEAR_TABLE}}",
@@ -842,22 +838,17 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             ).order_by(
                 "id"
             )  # Ordena por compliance_id
-            # Inicializar variables para calcular el porcentaje general
-            total_percentage = 0.0
-            num_cycles = len(datas_by_cycle)
-            for cycle in datas_by_cycle:
-                total_percentage += round(cycle["cycle_percentage"], 2)
-            general_percentage = round((total_percentage / num_cycles), 2)
+
             insert_table_conclusion_percentage(
-                doc, "{{TOTALS_TABLE}}", compliance_counts, general_percentage
+                doc, "{{TOTALS_TABLE}}", compliance_counts, data_completion_percentage
             )
 
             compliance_level = "NINGUNO"
-            if general_percentage < 50:
+            if data_completion_percentage < 50:
                 compliance_level = "BAJO"
-            elif general_percentage >= 50 and general_percentage < 80:
+            elif data_completion_percentage >= 50 and data_completion_percentage < 80:
                 compliance_level = "MEDIO"
-            elif general_percentage > 80:
+            elif data_completion_percentage > 80:
                 compliance_level = "ALTO"
 
             variables_to_change["{{COMPLIANCE_LEVEL}}"] = compliance_level
@@ -926,7 +917,9 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 {"cycle": cycle, "recomendations": recomendacion}
                 for cycle, recomendacion in resultados_por_cycle.items()
             ]
-            variables_to_change["{{PERCENTAGE_TOTAL}}"] = str(general_percentage)
+            variables_to_change["{{PERCENTAGE_TOTAL}}"] = str(
+                data_completion_percentage
+            )
             insert_table_recomendations(doc, "{{RECOMENDATIONS}}", resultado_final)
             replace_placeholders_in_document(doc, variables_to_change)
 
@@ -1013,7 +1006,9 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         else:
             diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
 
-        datas_by_cycle = DiagnosisService.calculate_completion_percentage(diagnosis.id)
+        percentage_success = DiagnosisService.calculate_completion_percentage_data(
+            diagnosis.id
+        )
 
         compliance_counts = (
             CheckList.objects.filter(diagnosis=diagnosis.id)
@@ -1024,15 +1019,8 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             .order_by("compliance_id")  # Ordena por compliance_id
         )
 
-        # Inicializar variables para calcular el porcentaje general
-        total_percentage = 0.0
-        num_cycles = len(datas_by_cycle)
-        for cycle in datas_by_cycle:
-            total_percentage += round(cycle["cycle_percentage"], 2)
-        general_percentage = round((total_percentage / num_cycles), 2)
-
         return Response(
-            {"counts": compliance_counts, "general": general_percentage},
+            {"counts": compliance_counts, "general": percentage_success},
             status=status.HTTP_200_OK,
         )
 

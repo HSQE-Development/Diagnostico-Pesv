@@ -91,6 +91,10 @@ class CheckListRequirementRepositoryInterface(ABC):
         pass
 
     @abstractmethod
+    def massive_delete(self, ids_to_delete):
+        pass
+
+    @abstractmethod
     def massive_update(self, data_to_save):
         pass
 

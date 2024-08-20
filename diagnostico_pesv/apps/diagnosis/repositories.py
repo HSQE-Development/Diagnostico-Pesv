@@ -96,6 +96,14 @@ class CheckListRequirementRepository(CheckListRequirementRepositoryInterface):
             pk=id, diagnosis=diagnosis_id
         ).first()
 
+    def get_checklist_requirement_by_diagnosis_id(self, diagnosis_id):
+        return Checklist_Requirement.objects.filter(diagnosis=diagnosis_id).first()
+
+    def massive_delete(self, ids_to_delete):
+        return Checklist_Requirement.objects.filter(id__in=ids_to_delete).delete(
+            hard=True
+        )
+
     def massive_save(self, data_to_save):
         return Checklist_Requirement.objects.bulk_create(data_to_save)
 
