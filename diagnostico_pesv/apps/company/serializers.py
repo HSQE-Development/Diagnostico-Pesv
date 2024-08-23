@@ -8,7 +8,7 @@ from .models import (
     MisionalitySizeCriteria,
     Ciiu,
 )
-from apps.sign.models import User
+from apps.diagnosis.models import Diagnosis
 from apps.sign.serializers import UserDetailSerializer
 from apps.arl.models import Arl
 from apps.arl.serializers import ArlSerializer

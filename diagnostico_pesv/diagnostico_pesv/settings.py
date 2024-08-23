@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.diagnosis_requirement",
     "apps.arl",
     "apps.corporate_group",
+    "apps.diagnosis_counter",
 ]
 
 MIDDLEWARE = [

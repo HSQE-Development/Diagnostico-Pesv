@@ -22,10 +22,8 @@ from .models import (
     MisionalitySizeCriteria,
     Ciiu,
 )
-from apps.diagnosis.models import Fleet, Driver, VehicleQuestions, DriverQuestion
+from apps.diagnosis.models import VehicleQuestions, DriverQuestion
 from apps.diagnosis.serializers import (
-    DriverSerializer,
-    FleetSerializer,
     VehicleQuestionSerializer,
     DriverQuestionSerializer,
 )

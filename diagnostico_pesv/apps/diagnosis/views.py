@@ -15,7 +15,11 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from apps.diagnosis_requirement.core.models import Diagnosis_Requirement, Recomendation
+from apps.diagnosis_requirement.core.models import (
+    Diagnosis_Requirement,
+    Recomendation,
+    WorkPlan_Recomendation,
+)
 from apps.diagnosis_requirement.infraestructure.serializers import (
     Recomendation_Serializer,
 )
@@ -29,12 +33,11 @@ from .models import (
 )
 from .serializers import (
     Diagnosis_QuestionsSerializer,
-    FleetSerializer,
-    DriverSerializer,
     DiagnosisSerializer,
 )
+from apps.diagnosis_counter.serializers import FleetSerializer, DriverSerializer
 from apps.company.models import Company, CompanySize
-from apps.diagnosis.models import Fleet, Driver
+from apps.diagnosis_counter.models import Fleet, Driver, Diagnosis_Counter
 from utils.functionUtils import blank_to_null
 from django.db import transaction
 from docx import Document
@@ -56,9 +59,19 @@ from apps.diagnosis_requirement.application.use_cases import (
 from apps.diagnosis_requirement.infraestructure.repositories import (
     DiagnosisRequirementRepository,
 )
-from django.db.models import Prefetch, OuterRef, Subquery, Q
+from django.db.models import (
+    Prefetch,
+    OuterRef,
+    Subquery,
+    Q,
+    Case,
+    When,
+    CharField,
+    Value,
+)
 from apps.sign.models import User
 from utils.constants import ComplianceIds
+from collections import OrderedDict
 
 
 def remove_invalid_requirements(diagnosis_id, valid_requirements):
@@ -112,12 +125,20 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         company_id = request.query_params.get("company")
         diagnosis_id = int(request.query_params.get("diagnosis", 0))
         try:
+            company = self.company_service.get_company(company_id)
             use_case = GetUseCases(self.diagnosis_repository)
             if diagnosis_id > 0:
                 diagnosis = use_case.get_by_id(diagnosis_id)
             else:
-                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company_id)
-            fleets = Fleet.objects.filter(deleted_at=None, diagnosis=diagnosis)
+                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company.id)
+
+            diagnosis_counter = Diagnosis_Counter.objects.filter(
+                diagnosis=diagnosis.id, company=company.id
+            ).first()
+
+            fleets = Fleet.objects.filter(
+                deleted_at=None, diagnosis_counter=diagnosis_counter.id
+            )
             serializer = FleetSerializer(fleets, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as ex:
@@ -130,12 +151,19 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         company_id = request.query_params.get("company")
         diagnosis_id = int(request.query_params.get("diagnosis", 0))
         try:
+            company = self.company_service.get_company(company_id)
             use_case = GetUseCases(self.diagnosis_repository)
             if diagnosis_id > 0:
                 diagnosis = use_case.get_by_id(diagnosis_id)
             else:
-                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company_id)
-            drivers = Driver.objects.filter(deleted_at=None, diagnosis=diagnosis)
+                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company.id)
+
+            diagnosis_counter = Diagnosis_Counter.objects.filter(
+                diagnosis=diagnosis.id, company=company.id
+            ).first()
+            drivers = Driver.objects.filter(
+                deleted_at=None, diagnosis_counter=diagnosis_counter.id
+            )
             serializer = DriverSerializer(drivers, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as ex:
@@ -412,14 +440,19 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     )
                     diagnosis = create_diagnosis.execute()
 
+                    new_diagnosis_count = Diagnosis_Counter(
+                        company=company, diagnosis=diagnosis
+                    )
+                    new_diagnosis_count.save()
+
                     total_vehicles, vehicle_errors = (
                         self.diagnosis_service.process_vehicle_data(
-                            diagnosis.id, vehicle_data
+                            new_diagnosis_count.id, vehicle_data
                         )
                     )
                     total_drivers, driver_errors = (
                         self.diagnosis_service.process_driver_data(
-                            diagnosis.id, driver_data
+                            new_diagnosis_count.id, driver_data
                         )
                     )
                     size_and_type = self.company_service.update_company_size(
@@ -496,7 +529,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             get_use_case = GetUseCases(self.diagnosis_repository)
             if diagnosis_id > 0:
                 diagnosis = get_use_case.get_by_id(diagnosis_id)
-            else: 
+            else:
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
                     company.id
                 )
@@ -627,16 +660,17 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     )
                     massive_update.execute()
 
-                # if questions_to_create:
-                #     massive_create = CheckListMassiveCreate(
-                #         self.checklist_repository, questions_to_create
-                #     )
-                #     massive_create.execute()
+                if questions_to_create:
+                    massive_create = CheckListMassiveCreate(
+                        self.checklist_repository, questions_to_create
+                    )
+                    massive_create.execute()
 
                 if not diagnosis.diagnosis_step == 2:
                     diagnosis.diagnosis_step = 2
                 if consultor.id != diagnosis.consultor.id:
                     diagnosis.consultor = consultor
+                diagnosis.in_progress = False
                 diagnosis.save()
 
                 return Response(
@@ -685,18 +719,23 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
                     company.id
                 )
-            if schedule and sequence:
-                if sequence != diagnosis.sequence or schedule != diagnosis.schedule:
-                    diagnosis.schedule = schedule
-                    diagnosis.sequence = sequence
-                    diagnosis.save()
+
+            diagnosis.schedule = schedule
+            diagnosis.sequence = sequence
+            diagnosis.save()
+
+            diagnosis_counter = Diagnosis_Counter.objects.filter(
+                diagnosis=diagnosis, company=company
+            ).first()
 
             vehicle_questions = VehicleQuestions.objects.all()
             driver_questions = DriverQuestion.objects.all()
-            fleet_data = Fleet.objects.filter(diagnosis=diagnosis.id)
-            driver_data = Driver.objects.filter(diagnosis=diagnosis.id)
+            fleet_data = Fleet.objects.filter(diagnosis_counter=diagnosis_counter.id)
+            driver_data = Driver.objects.filter(diagnosis_counter=diagnosis_counter.id)
 
-            totals_vehicles = Fleet.objects.filter(diagnosis=diagnosis.id).aggregate(
+            totals_vehicles = Fleet.objects.filter(
+                diagnosis_counter=diagnosis_counter.id
+            ).aggregate(
                 total_owned=Sum("quantity_owned"),
                 total_third_party=Sum("quantity_third_party"),
                 total_arrended=Sum("quantity_arrended"),
@@ -706,7 +745,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 total_renting=Sum("quantity_renting"),
             )
             total_quantity_driver = (
-                Driver.objects.filter(diagnosis=diagnosis.id).aggregate(
+                Driver.objects.filter(diagnosis_counter=diagnosis_counter.id).aggregate(
                     total_quantity=Sum("quantity")
                 )["total_quantity"]
                 or 0
@@ -897,20 +936,23 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             # Crear un diccionario para almacenar las recomendaciones agrupadas por cycle
             resultados_por_cycle = defaultdict(list)
             for recomendacion in recomendaciones:
-                cycle = recomendacion.requirement.cycle
-                nombre_recomendacion = recomendacion.name
+                if recomendacion.name != None:
+                    cycle = recomendacion.requirement.cycle
+                    nombre_recomendacion = (
+                        f"PASO {recomendacion.requirement.step} - {recomendacion.name}"
+                    )
 
-                # Crear una clave única para evitar duplicados
-                observation = observaciones_por_requirement.get(
-                    recomendacion.requirement_id, ""
-                )
+                    # Crear una clave única para evitar duplicados
+                    observation = observaciones_por_requirement.get(
+                        recomendacion.requirement_id, ""
+                    )
 
-                resultados_por_cycle[cycle].append(
-                    {
-                        "recomendacion": nombre_recomendacion,
-                        "observation": observation,
-                    }
-                )
+                    resultados_por_cycle[cycle].append(
+                        {
+                            "recomendacion": nombre_recomendacion,
+                            "observation": observation,
+                        }
+                    )
 
             # Convertir los resultados agrupados en una lista final
             resultado_final = [
@@ -921,6 +963,130 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 data_completion_percentage
             )
             insert_table_recomendations(doc, "{{RECOMENDATIONS}}", resultado_final)
+            replace_placeholders_in_document(doc, variables_to_change)
+
+            buffer = BytesIO()
+            doc.save(buffer)
+            buffer.seek(0)
+            word_file_content = buffer.getvalue()
+            if format_to_save == "pdf":
+                pdf_file_content = convert_docx_to_pdf_base64(word_file_content)
+                encoded_file = pdf_file_content
+            else:  # Default to Word
+                file_content = word_file_content
+                encoded_file = base64.b64encode(file_content).decode("utf-8")
+
+            return Response({"file": encoded_file}, status=status.HTTP_200_OK)
+        except Exception as ex:
+            tb_str = traceback.format_exc()  # Formatear la traza del error
+            return Response(
+                {"error": str(ex), "traceback": tb_str},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=[HTTPMethod.POST])
+    def generateWorkPlan(self, request: Request):
+        if platform.system() == "Windows":
+            try:
+                import pythoncom
+
+                pythoncom.CoInitialize()
+            except Exception as e:
+                print(f"Error al inicializar COM: {e}")
+
+        try:
+            company_id = request.query_params.get("company")
+            diagnosis_id = int(request.query_params.get("diagnosis"))
+            format_to_save = request.query_params.get(
+                "format_to_save"
+            )  # Default to 'word'
+
+            try:
+                company = self.company_service.get_company(company_id)
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Empresa no encontrada."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            get_use_case = GetUseCases(self.diagnosis_repository)
+            if diagnosis_id > 0:
+                diagnosis = get_use_case.get_by_id(diagnosis_id)
+            else:
+                diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
+                    company.id
+                )
+
+            template_path = os.path.join(
+                settings.MEDIA_ROOT, "templates/PLAN_DE_TRABAJO_BOLIVAR.docx"
+            )
+            doc = Document(template_path)
+            month, year = get_current_month_and_year()
+
+            variables_to_change = {
+                "{{COMPANY_NAME}}": company.name.upper(),
+                "{{COMPANY_NIT}}": format_nit(company.nit),
+                "{{DATE_ELABORED}}": f"{month.upper()} {year}",
+                "{{CONSULTOR_NAME}}": f"{diagnosis.consultor.first_name.upper()} {diagnosis.consultor.last_name.upper()}",
+                "{{SST_LICENSE}}": (
+                    diagnosis.consultor.licensia_sst
+                    if diagnosis.consultor.licensia_sst is not None
+                    else "SIN LICENCIA"
+                ),
+                "{{NIVEL_PESV}}": diagnosis.type.name.upper(),
+                "{{GENERAL_TABLE}}": "",
+            }
+
+            # Filtrar los Checklist_Requirement que tienen compliance con ID 2
+            checklist_requirements = Checklist_Requirement.objects.filter(
+                compliance__id=2, diagnosis=diagnosis.id
+            )
+
+            # Obtener los IDs de los requisitos asociados a los checklist_requirements
+            requirement_ids = checklist_requirements.values_list(
+                "requirement_id", flat=True
+            ).distinct()
+
+            requirements = Diagnosis_Requirement.objects.filter(
+                id__in=requirement_ids
+            ).distinct()
+
+            # Filtrar los WorkPlan_Recomendation que tienen un requirement que está en checklist_requirements
+            workplan_recommendations = WorkPlan_Recomendation.objects.filter(
+                requirement__in=requirements
+            )
+
+            # Obtener las observaciones relacionadas con el nombre de WorkPlan_Recomendation
+            observations = (
+                Checklist_Requirement.objects.filter(
+                    requirement__in=workplan_recommendations.values_list(
+                        "requirement_id", flat=True
+                    )
+                )
+                .select_related("requirement")
+                .values(
+                    "requirement__cycle",
+                    "requirement__name",
+                    "requirement__workplan_recomendation__name",
+                )
+                .distinct()  # Eliminar los duplicados
+            )
+
+            # Agrupar las observaciones por ciclo
+            grouped_observations = OrderedDict()
+            for obs in observations:
+                cycle = obs["requirement__cycle"]
+                if cycle not in grouped_observations:
+                    grouped_observations[cycle] = []
+                grouped_observations[cycle].append(
+                    {
+                        "requirement_name": obs["requirement__name"],
+                        "recommendation_name": obs[
+                            "requirement__workplan_recomendation__name"
+                        ],
+                    }
+                )
+            insert_table_work_plan(doc, "{{GENERAL_TABLE}}", grouped_observations)
             replace_placeholders_in_document(doc, variables_to_change)
 
             buffer = BytesIO()

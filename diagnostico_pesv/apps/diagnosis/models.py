@@ -50,8 +50,9 @@ class Diagnosis(SoftDeletes, Timestampable):
         blank=False,
         related_name="diagnosis_type",
     )
-    date_elabored = models.DateField(null=False, blank=False, unique=True)
+    date_elabored = models.DateField(null=False, blank=False)
     is_finalized = models.BooleanField(default=False, null=False)
+    in_progress = models.BooleanField(default=False, null=True)
     schedule = models.CharField(null=True, blank=False, max_length=100)
     sequence = models.CharField(null=True, blank=False, max_length=100)
     diagnosis_step = models.IntegerField(null=False, default=0)
@@ -77,25 +78,6 @@ class CheckList(SoftDeletes, Timestampable):
     verify_document = models.TextField(null=True, default=None, blank=False)
     observation = models.TextField(null=False, default="SIN OBSERVACIONES", blank=False)
     is_articuled = models.BooleanField(default=True)
-
-
-class Fleet(SoftDeletes, Timestampable):
-    diagnosis = models.ForeignKey(Diagnosis, on_delete=models.CASCADE)
-    vehicle_question = models.ForeignKey(VehicleQuestions, on_delete=models.CASCADE)
-    quantity_owned = models.IntegerField(default=0, null=False)
-    quantity_third_party = models.IntegerField(default=0, null=False)
-    quantity_arrended = models.IntegerField(default=0, null=False)
-    quantity_contractors = models.IntegerField(default=0, null=False)
-    quantity_intermediation = models.IntegerField(default=0, null=False)
-    quantity_leasing = models.IntegerField(default=0, null=False)
-    quantity_renting = models.IntegerField(default=0, null=False)
-    quantity_employees = models.IntegerField(default=0, null=False)
-
-
-class Driver(SoftDeletes, Timestampable):
-    diagnosis = models.ForeignKey(Diagnosis, on_delete=models.CASCADE)
-    driver_question = models.ForeignKey(DriverQuestion, on_delete=models.CASCADE)
-    quantity = models.IntegerField(default=0, null=False)
 
 
 class Checklist_Requirement(SoftDeletes, Timestampable):

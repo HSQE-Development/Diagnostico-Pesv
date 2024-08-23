@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from datetime import datetime
 from collections import defaultdict
+from apps.diagnosis_counter.models import Fleet, Driver, Diagnosis_Counter
+from apps.diagnosis_counter.serializers import FleetSerializer, DriverSerializer
+from django.db import transaction
 
 
 class DiagnosisService:
@@ -211,40 +214,52 @@ class DiagnosisService:
         return result
 
     @staticmethod
-    def process_vehicle_data(diagnosis_id, vehicle_data):
+    def process_vehicle_data(diagnosis_count_id, vehicle_data):
         vehicle_errors = []
-        total_vehicles = functionUtils.calculate_total_vehicles_quantities_for_company(
-            vehicle_data
-        )
-        for vehicle in vehicle_data:
-            vehicle["diagnosis"] = diagnosis_id
-            fleet_instance = Fleet.objects.filter(
-                diagnosis=diagnosis_id, vehicle_question=vehicle.get("vehicle_question")
-            ).first()
-            serializer_fleet = FleetSerializer(instance=fleet_instance, data=vehicle)
-            if serializer_fleet.is_valid():
-                serializer_fleet.save()
-            else:
-                vehicle_errors.append(serializer_fleet.errors)
-        return total_vehicles, vehicle_errors
+        with transaction.atomic():
+            total_vehicles = (
+                functionUtils.calculate_total_vehicles_quantities_for_company(
+                    vehicle_data
+                )
+            )
+            for vehicle in vehicle_data:
+                vehicle["diagnosis_counter"] = diagnosis_count_id
+                fleet_instance = Fleet.objects.filter(
+                    diagnosis_counter=diagnosis_count_id,
+                    vehicle_question=vehicle.get("vehicle_question"),
+                ).first()
+                serializer_fleet = FleetSerializer(
+                    instance=fleet_instance, data=vehicle
+                )
+                if serializer_fleet.is_valid():
+                    serializer_fleet.save()
+                else:
+                    vehicle_errors.append(serializer_fleet.errors)
+            return total_vehicles, vehicle_errors
 
     @staticmethod
-    def process_driver_data(diagnosis_id, driver_data):
+    def process_driver_data(diagnosis_count_id, driver_data):
         driver_errors = []
-        total_drivers = functionUtils.calculate_total_drivers_quantities_for_company(
-            driver_data
-        )
-        for driver in driver_data:
-            driver["diagnosis"] = diagnosis_id
-            driver_instance = Driver.objects.filter(
-                diagnosis=diagnosis_id, driver_question=driver.get("driver_question")
-            ).first()
-            serializer_driver = DriverSerializer(instance=driver_instance, data=driver)
-            if serializer_driver.is_valid():
-                serializer_driver.save()
-            else:
-                driver_errors.append(serializer_driver.errors)
-        return total_drivers, driver_errors
+        with transaction.atomic():
+            total_drivers = (
+                functionUtils.calculate_total_drivers_quantities_for_company(
+                    driver_data
+                )
+            )
+            for driver in driver_data:
+                driver["diagnosis_counter"] = diagnosis_count_id
+                driver_instance = Driver.objects.filter(
+                    diagnosis_counter=diagnosis_count_id,
+                    driver_question=driver.get("driver_question"),
+                ).first()
+                serializer_driver = DriverSerializer(
+                    instance=driver_instance, data=driver
+                )
+                if serializer_driver.is_valid():
+                    serializer_driver.save()
+                else:
+                    driver_errors.append(serializer_driver.errors)
+            return total_drivers, driver_errors
 
     @staticmethod
     def build_error_response(vehicle_errors, driver_errors):

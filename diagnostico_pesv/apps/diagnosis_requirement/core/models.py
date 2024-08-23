@@ -23,3 +23,10 @@ class Recomendation(SoftDeletes, Timestampable):
     standard = models.BooleanField(default=False, null=False, blank=False)
     advanced = models.BooleanField(default=False, null=False, blank=False)
     all = models.BooleanField(default=False, null=False, blank=False)
+
+
+class WorkPlan_Recomendation(SoftDeletes, Timestampable):
+    name = models.TextField(null=True, blank=False)
+    requirement = models.ForeignKey(
+        Diagnosis_Requirement, on_delete=models.SET_NULL, null=True
+    )

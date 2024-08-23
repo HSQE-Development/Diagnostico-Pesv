@@ -675,6 +675,61 @@ def merge_cells_vertically(cell):
     cell._tc.get_or_add_tcPr().append(OxmlElement("w:vMerge"))
 
 
+def insert_table_work_plan(doc: Document, placeholder: str, data: dict):
+    for paragraph in doc.paragraphs:
+        if placeholder in paragraph.text:
+            index = paragraph._element.getparent().index(paragraph._element)
+            table = doc.add_table(rows=1, cols=8)
+            table.style = "Table Grid"
+
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = "PLAN DE TRABAJO"
+            hdr_cells[0].merge(hdr_cells[5])
+            hdr_cells[6].text = "HORAS"
+            hdr_cells[7].text = ""  # Empty cell
+            # Agregar datos a la tabla
+            VALID_STEPS = {
+                "P": "PLANEAR",
+                "H": "HACER",
+                "V": "VERIFICAR",
+                "A": "ACTUAR",
+            }
+            for cycle, recommendations in data.items():
+                # Fila para el ciclo
+                phase_name = VALID_STEPS.get(cycle.upper(), "Otros").upper()
+                cycle_row = table.add_row().cells
+                cycle_row[0].text = phase_name
+                cycle_row[0].merge(cycle_row[7])
+                align_cell_text(cycle_row[0])
+                if cycle.upper() == "P":
+                    set_cell_background_color(cycle_row[0], "0066B2")
+                elif cycle.upper() == "H":
+                    set_cell_background_color(cycle_row[0], "00A551")
+                elif cycle.upper() == "V":
+                    set_cell_background_color(cycle_row[0], "DCB00A")
+                elif cycle.upper() == "A":
+                    set_cell_background_color(cycle_row[0], "EC1C24")
+                set_cell_text_color(cycle_row[0])
+                # Añadir filas para las recomendaciones bajo el ciclo
+                for rec in recommendations:
+                    rec_row = table.add_row().cells
+                    rec_row[0].text = rec["recommendation_name"]
+                    rec_row[0].merge(rec_row[5])
+            total_row = table.add_row().cells
+            total_row[0].text = "TOTAL HORAS"
+            total_row[0].merge(total_row[5])
+            set_cell_background_color(total_row[0], "2f4858")
+            set_cell_background_color(total_row[6], "2f4858")
+            set_cell_background_color(total_row[7], "2f4858")
+            set_cell_text_color(total_row[0])
+            set_cell_text_color(total_row[6])
+            set_cell_text_color(total_row[7])
+            align_cell_text(total_row[0])
+
+            table._element.getparent().insert(index + 1, table._element)
+            return  # Salir después de insertar la tabla para evitar múltiples inserciones
+
+
 def insert_table_conclusion(
     doc: Document, placeholder: str, datas_by_cycle, sizeName: str
 ):
@@ -1053,7 +1108,6 @@ def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
         os.remove(temp_pdf_name)
 
     return pdf_base64
-
 
 
 def calculate_obtained_value(num_questions):

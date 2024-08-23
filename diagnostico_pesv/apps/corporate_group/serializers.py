@@ -34,7 +34,7 @@ class CorporateCompanyDiagnosisSerializer(serializers.ModelSerializer):
     company_detail = CompanySerializer(source="company", read_only=True)
 
     class Meta:
-        model = Corporate
+        model = Corporate_Company_Diagnosis
         fields = [
             "id",
             "company",
