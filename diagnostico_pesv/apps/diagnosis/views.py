@@ -1190,6 +1190,36 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=False)
+    def count_diagnosis_by_consultor(self, request: Request):
+        consultor_id = request.query_params.get("consultor")
+        data = (
+            Diagnosis.objects.filter(consultor__id=consultor_id)
+            .values("consultor__id", "consultor__username")
+            .annotate(total=Count("id"))
+        )
+        return Response(data)
+
+    @action(detail=False)
+    def count_diagnosis_by_consultor_by_type(self, request: Request):
+        consultor_id = request.query_params.get("consultor")
+        data = (
+            Diagnosis.objects.filter(consultor__id=consultor_id)
+            .values("type__name")
+            .annotate(total=Count("id"))
+        )
+        return Response(data)
+
+    @action(detail=False)
+    def count_diagnosis_by_consultor_by_mode_ejecution(self, request: Request):
+        consultor_id = request.query_params.get("consultor")
+        data = (
+            Diagnosis.objects.filter(consultor__id=consultor_id)
+            .values("consultor__id", "consultor__username", "mode_ejecution")
+            .annotate(total=Count("id"))
+        )
+        return Response(data)
+
     def get_queryset(self):
         diagnosis_id = self.request.query_params.get("diagnosis")
         if diagnosis_id is not None:

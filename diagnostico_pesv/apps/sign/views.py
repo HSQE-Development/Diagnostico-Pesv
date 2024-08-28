@@ -104,6 +104,35 @@ def profile(request):
 @api_view(["GET"])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def find_by_id(request: Request):
+    try:
+        user_id = request.query_params.get("user")
+
+        user = User.objects.get(pk=user_id)
+        serializer = UserDetailSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["PATCH"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def update(request: Request):
+    user_id = request.data.get("id")
+    user = User.objects.get(pk=user_id)
+    serializer = UserSerializer(user, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def findAllConsultants(request):
     try:
         consultor_group = Group.objects.get(name=GroupTypes.CONSULTOR.value)

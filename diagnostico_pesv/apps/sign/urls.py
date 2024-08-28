@@ -24,4 +24,6 @@ urlpatterns = [
     path("register", views.register),
     path("profile", views.profile),
     path("findAllConsultants", views.findAllConsultants),
+    path("find_by_id", views.find_by_id),
+    path("update", views.update),
 ]
