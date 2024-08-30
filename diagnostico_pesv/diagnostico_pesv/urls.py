@@ -32,5 +32,5 @@ urlpatterns = [
     path(f"{API_PREFIX}/corporate_groups/", include("apps.corporate_group.urls")),
 ]
 # Con esta linea se puede acceder a los archivos media guardados en el servidor
-if settings.DEBUG:
+if settings:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

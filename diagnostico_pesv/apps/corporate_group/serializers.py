@@ -1,7 +1,5 @@
 from rest_framework import serializers
 from .models import *
-from apps.diagnosis.models import Diagnosis
-from apps.diagnosis.serializers import DiagnosisSerializer
 from apps.company.models import Company
 from apps.company.serializers import CompanySerializer
 
@@ -14,6 +12,7 @@ class CorporateGroupSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "nit",
             "company_diagnoses_corporate",
         ]
 
@@ -24,10 +23,6 @@ class CorporateGroupSerializer(serializers.ModelSerializer):
 
 
 class CorporateCompanyDiagnosisSerializer(serializers.ModelSerializer):
-    diagnosis = serializers.PrimaryKeyRelatedField(
-        queryset=Diagnosis.objects.all(), write_only=True
-    )
-    diagnosis_detail = DiagnosisSerializer(source="diagnosis", read_only=True)
     company = serializers.PrimaryKeyRelatedField(
         queryset=Company.objects.all(), write_only=True
     )
@@ -39,6 +34,4 @@ class CorporateCompanyDiagnosisSerializer(serializers.ModelSerializer):
             "id",
             "company",
             "company_detail",
-            "diagnosis",
-            "diagnosis_detail",
         ]

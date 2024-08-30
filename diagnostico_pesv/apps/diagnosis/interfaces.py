@@ -39,6 +39,16 @@ class DiagnosisRepositoryInterface(ABC):
     def update(self, data_to_save: Diagnosis) -> Diagnosis:
         pass
 
+    @abstractmethod
+    def get_by_corporate(self, corporate_id: int) -> Diagnosis | None:
+        pass
+
+    @abstractmethod
+    def get_by_diagnosis_and_requirement(
+        self, diagnosis, requirement
+    ) -> Checklist_Requirement | None:
+        pass
+
 
 class IDiagnosisQuestionRepository(ABC):
     @abstractmethod
@@ -69,6 +79,9 @@ class CheckListRepositoryInterface(ABC):
 class CheckListRequirementRepositoryInterface(ABC):
     @abstractmethod
     def save(self, checklist_requirement_data: dict) -> Checklist_Requirement:
+        pass
+
+    def save_or_update(self, checklist_requirement_data: dict) -> Checklist_Requirement:
         pass
 
     @abstractmethod

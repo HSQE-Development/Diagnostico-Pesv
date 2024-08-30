@@ -68,3 +68,10 @@ class CompanyService:
             company.mission.id, total_vehicles, total_drivers
         )
         return CompanySize.objects.get(pk=company_size_id)
+
+    @staticmethod
+    def update_company_size_highest(company, total_vehicles, total_drivers):
+        company_size_id = CompanyService.determine_company_size(
+            company.mission.id, total_vehicles, total_drivers
+        )
+        return CompanySize.objects.get(pk=company_size_id)

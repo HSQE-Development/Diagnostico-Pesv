@@ -96,7 +96,7 @@ class DiagnosisSerializer(serializers.ModelSerializer):
     # )
     # company_detail = CompanySerializer(source="company", read_only=True)
     consultor = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), write_only=True
+        queryset=User.objects.all(), write_only=True, required=False, allow_null=True
     )
     consultor_detail = UserDetailSerializer(source="consultor", read_only=True)
 
@@ -117,10 +117,13 @@ class DiagnosisSerializer(serializers.ModelSerializer):
             "sequence",
             "observation",
             "in_progress",
+            "is_for_corporate_group",
+            "corporate_group",
         ]
         extra_kwargs = {
             "date_elabored": {"allow_null": True, "required": False},
             "type": {"allow_null": True, "required": False},
+            "consultor": {"allow_null": True, "required": False},
         }
 
 

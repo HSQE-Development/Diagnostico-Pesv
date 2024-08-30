@@ -44,6 +44,12 @@ class GetUseCases:
     def get_by_id(self, diagnosis_id):
         return self.repository.get_by_id(diagnosis_id)
 
+    def get_by_corporate(self, corporate_id):
+        return self.repository.get_by_corporate(corporate_id)
+
+    def get_by_diagnosis_and_requirement(self, diagnosis, requirement):
+        return self.repository.get_by_diagnosis_and_requirement(diagnosis, requirement)
+
 
 class CreateChecklistRequirement:
     def __init__(
@@ -55,6 +61,18 @@ class CreateChecklistRequirement:
     def execute(self) -> Checklist_Requirement:
         # Pasar los datos del diccionario al repositorio
         return self.repository.save(self.diagnosis_data)
+
+
+class CreateOrUpdateChecklistRequirement:
+    def __init__(
+        self, repository: CheckListRequirementRepositoryInterface, diagnosis_data: dict
+    ):
+        self.repository = repository
+        self.diagnosis_data = diagnosis_data
+
+    def execute(self) -> Checklist_Requirement:
+        # Pasar los datos del diccionario al repositorio
+        return self.repository.save_or_update(self.diagnosis_data)
 
 
 class GetComplianceById:

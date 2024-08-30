@@ -5,12 +5,15 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import status, viewsets
 from .models import *
 from .serializers import *
+from apps.diagnosis.serializers import DiagnosisSerializer
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import (
     action,
 )
 from django.db import transaction
+from apps.diagnosis.models import Diagnosis
 from http import HTTPMethod
+import traceback
 
 
 class CustomPagination(PageNumberPagination):
@@ -35,19 +38,12 @@ class CorporateGroupViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 companies_ids = request.data.get("companies", [])
-                diagnosis_ids = request.data.get("diagnosis")
                 name = request.data.get("name", "")
                 corporate = Corporate(name=name)
                 corporate.save()
 
                 companies = Company.objects.filter(id__in=companies_ids)
                 corporate.companies.set(companies)
-                if diagnosis_ids:
-                    dagnosis = Diagnosis.objects.filter(id__in=diagnosis_ids)
-                    corporate.diagnoses.set(dagnosis)
-                else:
-                    corporate.diagnoses.set([])
-
                 serializer = self.get_serializer(corporate)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as ex:

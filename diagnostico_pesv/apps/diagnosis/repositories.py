@@ -31,6 +31,11 @@ class DiagnosisRepository(DiagnosisRepositoryInterface):
     def get_by_id(self, diagnosis_id):
         return Diagnosis.objects.get(id=diagnosis_id)
 
+    def get_by_corporate(self, corporate_id):
+        return Diagnosis.objects.filter(
+            is_for_corporate_group=True, corporate_group=corporate_id
+        ).first()
+
     def get_all(self):
         return Diagnosis.objects.all()
 
@@ -45,6 +50,11 @@ class DiagnosisRepository(DiagnosisRepositoryInterface):
     def update(self, data_to_save: Diagnosis) -> Diagnosis:
         data_to_save.save()
         return data_to_save
+
+    def get_by_diagnosis_and_requirement(self, diagnosis, requirement):
+        return Checklist_Requirement.objects.filter(
+            diagnosis=diagnosis, requirement=requirement
+        ).first()
 
 
 class CheckListRepository(CheckListRepositoryInterface):
@@ -80,6 +90,24 @@ class CheckListRequirementRepository(CheckListRequirementRepositoryInterface):
     def save(self, checklist_requirement_data):
 
         checklist_requirement = Checklist_Requirement(**checklist_requirement_data)
+        checklist_requirement.save()
+        return checklist_requirement
+
+    def save_or_update(self, checklist_requirement_data):
+        diagnosis = checklist_requirement_data.get("diagnosis")
+        requirement = checklist_requirement_data.get("requirement")
+        compliance = checklist_requirement_data.get("compliance")
+
+        checklist_requirement = Checklist_Requirement.objects.filter(
+            diagnosis=diagnosis, requirement=requirement, compliance=compliance
+        ).first()
+        if checklist_requirement:
+            # Si el registro ya existía, actualizar los campos con los nuevos datos
+            for key, value in checklist_requirement_data.items():
+                setattr(checklist_requirement, key, value)
+        else:
+            # Si no existe, crear uno nuevo
+            checklist_requirement = Checklist_Requirement(**checklist_requirement_data)
         checklist_requirement.save()
         return checklist_requirement
 

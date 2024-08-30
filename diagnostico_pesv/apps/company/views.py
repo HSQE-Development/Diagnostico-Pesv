@@ -291,6 +291,25 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False)
+    def diagnosis_by_company(self, request: Request):
+        companies = Company.objects.all()
+        diagnostics_data = [
+            {
+                "name": company.name,
+                "total_diagnostics": company.company_diagnosis.count(),
+                "finalized_diagnostics": company.company_diagnosis.filter(
+                    is_finalized=True
+                ).count(),
+                "in_progress_diagnostics": company.company_diagnosis.filter(
+                    in_progress=True
+                ).count(),
+            }
+            for company in companies
+        ]
+
+        return Response(diagnostics_data)
+
 
 # @api_view(["POST"])
 # @authentication_classes([JWTAuthentication])

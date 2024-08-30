@@ -1,6 +1,6 @@
 from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
-from apps.company.models import Company
+from apps.company.models import Company, CompanySize
 from apps.diagnosis.models import Diagnosis, VehicleQuestions, DriverQuestion
 
 
@@ -13,6 +13,10 @@ class Diagnosis_Counter(SoftDeletes, Timestampable):
         related_name="company_counter",
     )
     diagnosis = models.ForeignKey(Diagnosis, on_delete=models.CASCADE)
+    size = models.ForeignKey(
+        CompanySize, on_delete=models.SET_NULL, null=True, blank=False
+    )  # Añadido
+    observation = models.TextField(null=True, default=None, blank=False)
 
 
 class Fleet(SoftDeletes, Timestampable):

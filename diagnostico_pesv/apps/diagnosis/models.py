@@ -3,6 +3,7 @@ from timestamps.models import SoftDeletes, Timestampable
 from apps.diagnosis_requirement.core.models import Diagnosis_Requirement
 from apps.company.models import Company, CompanySize
 from apps.sign.models import User
+from apps.corporate_group.models import Corporate
 
 
 class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico
@@ -61,6 +62,14 @@ class Diagnosis(SoftDeletes, Timestampable):
         max_length=100, choices=MODOS, default="presencial"
     )
     observation = models.TextField(blank=False, null=True)
+    is_for_corporate_group = models.BooleanField(default=False, null=False)
+    corporate_group = models.ForeignKey(
+        Corporate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=False,
+        related_name="corporates_diagnosis",
+    )
 
 
 class CheckList(SoftDeletes, Timestampable):

@@ -68,10 +68,13 @@ from django.db.models import (
     When,
     CharField,
     Value,
+    F,
 )
 from apps.sign.models import User
 from utils.constants import ComplianceIds
 from collections import OrderedDict
+from apps.corporate_group.repositories import CorporateGroupRepository
+from rest_framework.exceptions import NotFound
 
 
 def remove_invalid_requirements(diagnosis_id, valid_requirements):
@@ -119,27 +122,64 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     checklist_repository = CheckListRepository()
     compliance_repository = ComplianceRepository()
     diagnosis_question = DiagnosisQuestionRepository()
+    corporate_group_repository = CorporateGroupRepository()
 
     @action(detail=False)
     def findFleetsByCompanyId(self, request: Request):
         company_id = request.query_params.get("company")
         diagnosis_id = int(request.query_params.get("diagnosis", 0))
+        corporate_group_id = request.query_params.get("corporate_group")
+
+        # Validar y convertir el company_id y diagnosis_id
+        if not company_id:
+            return Response(
+                {"error": "Company ID is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if int(company_id) > 0:
+            try:
+                company = self.company_service.get_company(company_id)
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Company not found"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+        diagnosis = None
         try:
-            company = self.company_service.get_company(company_id)
+            if corporate_group_id:
+                corporate_group = self.corporate_group_repository.get_by_id(
+                    corporate_group_id
+                )
+            else:
+                corporate_group = None
+
             use_case = GetUseCases(self.diagnosis_repository)
+
             if diagnosis_id > 0:
                 diagnosis = use_case.get_by_id(diagnosis_id)
             else:
-                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company.id)
+                if corporate_group:
+                    diagnosis = use_case.get_by_corporate(corporate_group.id)
+                else:
+                    diagnosis = use_case.get_unfinalized_diagnosis_for_company(
+                        company.id
+                    )
+            if diagnosis is not None:
+                if int(company_id) > 0:
+                    diagnosis_counter = Diagnosis_Counter.objects.filter(
+                        diagnosis=diagnosis.id, company=company.id
+                    ).first()
 
-            diagnosis_counter = Diagnosis_Counter.objects.filter(
-                diagnosis=diagnosis.id, company=company.id
-            ).first()
-
-            fleets = Fleet.objects.filter(
-                deleted_at=None, diagnosis_counter=diagnosis_counter.id
-            )
-            serializer = FleetSerializer(fleets, many=True)
+                    if diagnosis_counter:
+                        fleets = Fleet.objects.filter(
+                            diagnosis_counter=diagnosis_counter.id
+                        )
+                        serializer = FleetSerializer(fleets, many=True)
+                    else:
+                        serializer = FleetSerializer([], many=True)
+                else:
+                    serializer = FleetSerializer([], many=True)
+            else:
+                serializer = FleetSerializer([], many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as ex:
             return Response(
@@ -150,31 +190,69 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     def findDriversByCompanyId(self, request: Request):
         company_id = request.query_params.get("company")
         diagnosis_id = int(request.query_params.get("diagnosis", 0))
+        corporate_group_id = request.query_params.get("corporate_group")
+        # Validar y convertir el company_id y diagnosis_id
+        if not company_id:
+            return Response(
+                {"error": "Company ID is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if int(company_id) > 0:
+            try:
+                company = self.company_service.get_company(company_id)
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Company not found"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+        diagnosis = None
         try:
-            company = self.company_service.get_company(company_id)
+            if corporate_group_id:
+                corporate_group = self.corporate_group_repository.get_by_id(
+                    corporate_group_id
+                )
+            else:
+                corporate_group = None
+
             use_case = GetUseCases(self.diagnosis_repository)
             if diagnosis_id > 0:
                 diagnosis = use_case.get_by_id(diagnosis_id)
             else:
-                diagnosis = use_case.get_unfinalized_diagnosis_for_company(company.id)
-
-            diagnosis_counter = Diagnosis_Counter.objects.filter(
-                diagnosis=diagnosis.id, company=company.id
-            ).first()
-            drivers = Driver.objects.filter(
-                deleted_at=None, diagnosis_counter=diagnosis_counter.id
-            )
-            serializer = DriverSerializer(drivers, many=True)
+                if corporate_group:
+                    diagnosis = use_case.get_by_corporate(corporate_group.id)
+                else:
+                    diagnosis = use_case.get_unfinalized_diagnosis_for_company(
+                        company.id
+                    )
+            if diagnosis is not None:
+                if int(company_id) > 0:
+                    diagnosis_counter = Diagnosis_Counter.objects.filter(
+                        diagnosis=diagnosis.id, company=company.id
+                    ).first()
+                    if diagnosis_counter:
+                        drivers = Driver.objects.filter(
+                            deleted_at=None, diagnosis_counter=diagnosis_counter.id
+                        )
+                        serializer = DriverSerializer(drivers, many=True)
+                    else:
+                        serializer = DriverSerializer([], many=True)
+                else:
+                    serializer = DriverSerializer([], many=True)
+            else:
+                serializer = DriverSerializer([], many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as ex:
+            tb_str = traceback.format_exc()
             return Response(
-                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": str(ex), "traceback": tb_str},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=False)
     def findQuestionsByCompanySize(self, request: Request):
         try:
             company_id = request.query_params.get("company")
+            get_use_case = GetUseCases(self.diagnosis_repository)
+
             group_by_step = (
                 request.query_params.get("group_by_step", "false").lower() == "true"
             )
@@ -186,16 +264,9 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            try:
-                company = self.company_service.get_company(company_id)
-            except Company.DoesNotExist:
-                return Response(
-                    {"error": "Empresa no encontrada."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            get_use_case = GetUseCases(self.diagnosis_repository)
             if diagnosis_id > 0:
                 diagnosis = get_use_case.get_by_id(diagnosis_id)
+
                 checklist_questions = CheckList.objects.filter(
                     diagnosis_id=diagnosis.id
                 ).select_related("question", "compliance")
@@ -208,9 +279,15 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     questions_queryset = Diagnosis_Questions.objects.filter(
                         id__in=question_ids
                     )
-
                 # questions_queryset = CheckList.objects.filter(diagnosis_id=diagnosis_id)
             else:
+                try:
+                    company = self.company_service.get_company(company_id)
+                except Company.DoesNotExist:
+                    return Response(
+                        {"error": "Empresa no encontrada."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
                     company.id
                 )
@@ -404,6 +481,179 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         return Response(processed_data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=[HTTPMethod.POST])
+    def save_count_for_company_in_corporate(self, request: Request):
+        company_id = request.data.get("company")
+        corporate_id = request.data.get("corporate")
+        vehicle_data = request.data.get("vehicleData", [])
+        driver_data = request.data.get("driverData", [])
+        diagnosis_data = {
+            "company": None,
+            "date_elabored": None,
+            "consultor": None,
+            "corporate_group": corporate_id,
+            "is_for_corporate_group": True,
+        }
+        diagnosis_serializer = DiagnosisSerializer(data=diagnosis_data)
+        if diagnosis_serializer.is_valid():
+            try:
+                with transaction.atomic():
+                    company = self.company_service.get_company(company_id)
+                    existing_diagnosis = Diagnosis.objects.filter(
+                        corporate_group=corporate_id, is_finalized=False
+                    ).first()
+                    diagnosis_counter = None
+
+                    if existing_diagnosis:
+                        diagnosis = existing_diagnosis
+                    else:
+                        create_diagnosis = CreateDiagnosis(
+                            self.diagnosis_repository,
+                            diagnosis_serializer.validated_data,
+                            consultor=None,
+                        )
+                        diagnosis = create_diagnosis.execute()
+                        diagnosis.in_progress = True
+
+                    exist_counter = Diagnosis_Counter.objects.filter(
+                        company=company, diagnosis=diagnosis
+                    ).first()
+                    if exist_counter:
+                        diagnosis_counter = exist_counter
+                    else:
+                        diagnosis_counter = Diagnosis_Counter(
+                            company=company, diagnosis=diagnosis
+                        )
+                        diagnosis_counter.save()
+
+                    total_vehicles, vehicle_errors = (
+                        self.diagnosis_service.process_vehicle_data(
+                            diagnosis_counter.id, vehicle_data
+                        )
+                    )
+                    total_drivers, driver_errors = (
+                        self.diagnosis_service.process_driver_data(
+                            diagnosis_counter.id, driver_data
+                        )
+                    )
+                    size_and_type = self.company_service.update_company_size(
+                        company, total_vehicles, total_drivers
+                    )
+                    diagnosis_counter.size = size_and_type
+                    diagnosis.type = None
+                    diagnosis.diagnosis_step = 1
+                    diagnosis.save()
+                    diagnosis_counter.save()
+
+                    return self.diagnosis_service.build_success_response(
+                        vehicle_data, driver_data, diagnosis
+                    )
+
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Company not found."}, status=status.HTTP_404_NOT_FOUND
+                )
+            except Exception as ex:
+                tb_str = traceback.format_exc()
+                return Response(
+                    {"error": str(ex), "traceback": tb_str},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+        return Response(diagnosis_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=[HTTPMethod.POST])
+    def init_diagnosis_corporate(self, request: Request):
+        try:
+            use_case = GetUseCases(self.diagnosis_repository)
+            corporate_id = request.data.get("corporate")
+            if not corporate_id:
+                return Response(
+                    {"error": "El id del grupo empresarial es obligatiorio"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            corporate_group = self.corporate_group_repository.get_by_id(corporate_id)
+            if not corporate_group:
+                return Response(
+                    {"error": "El grupo empresarial no existe"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            diagnosis = use_case.get_by_corporate(corporate_group.id)
+
+            company_totals = (
+                Diagnosis_Counter.objects.filter(diagnosis=diagnosis.id)
+                .values("company")
+                .annotate(
+                    total_vehicles=Sum(
+                        F("fleet__quantity_owned")
+                        + F("fleet__quantity_third_party")
+                        + F("fleet__quantity_arrended")
+                        + F("fleet__quantity_contractors")
+                        + F("fleet__quantity_intermediation")
+                        + F("fleet__quantity_leasing")
+                        + F("fleet__quantity_renting")
+                        + F("fleet__quantity_employees")
+                    ),
+                    total_drivers=Sum("driver__quantity"),
+                )
+            )
+            highest_company = None
+            highest_size = None
+            for company_total in company_totals:
+                company_id = company_total["company"]
+                company = Company.objects.get(id=company_id)
+                total_vehicles = company_total["total_vehicles"] or 0
+                total_drivers = company_total["total_drivers"] or 0
+                size_and_type = self.company_service.update_company_size(
+                    company, total_vehicles, total_drivers
+                )
+                # Comparar con el tamaño más alto encontrado hasta ahora
+                if highest_size is None or size_and_type.id > highest_size:
+                    highest_size = size_and_type.id
+                    highest_company = company
+
+            corporate_group.nit = highest_company.nit
+            company_size = CompanySize.objects.get(id=highest_size)
+            diagnosis.type = company_size
+
+            diagnosis_requirement_use_case = DiagnosisRequirementUseCases(
+                self.diagnosis_requirement_repository
+            )
+            requirements = diagnosis_requirement_use_case.get_diagnosis_requirements_by_company_size(
+                diagnosis.type.id
+            )
+
+            get_compliance = GetComplianceById(self.compliance_repository, 2)
+            compliance_default = get_compliance.execute()
+
+            for requirement in requirements:
+                existing_checklist_requirement = (
+                    use_case.get_by_diagnosis_and_requirement(diagnosis, requirement)
+                )
+                compliance = (
+                    existing_checklist_requirement.compliance
+                    if existing_checklist_requirement
+                    else compliance_default
+                )
+                data = {
+                    "diagnosis": diagnosis,
+                    "compliance": compliance,
+                    "requirement": requirement,
+                }
+                create = CreateOrUpdateChecklistRequirement(
+                    self.checklist_requirement_repository, data
+                )
+                create.execute()
+
+            corporate_group.save()
+            diagnosis.save()
+            serializer = DiagnosisSerializer(diagnosis)
+            return Response(serializer.data)
+        except Exception as ex:
+            return Response(
+                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=[HTTPMethod.POST])
     def saveAnswerCuestions(self, request: Request):
         consultor_id = request.data.get("consultor")
         company_id = request.data.get("company")
@@ -514,13 +764,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             diagnosis_id = int(request.query_params.get("diagnosis"))
 
             try:
-                company = self.company_service.get_company(company_id)
                 consultor = User.objects.get(pk=consultor_id)
-            except Company.DoesNotExist:
-                return Response(
-                    {"error": "Empresa no encontrada."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
             except User.DoesNotExist:
                 return Response(
                     {"error": "Consultor no encontrada."},
@@ -530,12 +774,23 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             if diagnosis_id > 0:
                 diagnosis = get_use_case.get_by_id(diagnosis_id)
             else:
+                try:
+                    company = self.company_service.get_company(company_id)
+                except Company.DoesNotExist:
+                    return Response(
+                        {"error": "Empresa no encontrada."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
                     company.id
                 )
             with transaction.atomic():
                 questions_to_create = []
                 questions_to_update = []
+
+                if not diagnosis.consultor:
+                    diagnosis.consultor = consultor
+                    diagnosis.save()
                 for diagnosis_questions in diagnosisDto:
                     question_id = diagnosis_questions["question"]
 
@@ -704,16 +959,19 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             format_to_save = request.query_params.get(
                 "format_to_save"
             )  # Default to 'word'
-            try:
-                company = self.company_service.get_company(company_id)
-            except Company.DoesNotExist:
-                return Response(
-                    {"error": "Empresa no encontrada."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+            company = None
+
+            if int(company_id) > 0:
+                try:
+                    company = self.company_service.get_company(company_id)
+                except Company.DoesNotExist:
+                    return Response(
+                        {"error": "Empresa no encontrada."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
 
             get_use_case = GetUseCases(self.diagnosis_repository)
-            if diagnosis_id > 0:
+            if int(diagnosis_id) > 0:
                 diagnosis = get_use_case.get_by_id(diagnosis_id)
             else:
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
@@ -723,63 +981,22 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             diagnosis.schedule = schedule
             diagnosis.sequence = sequence
             diagnosis.save()
-
-            diagnosis_counter = Diagnosis_Counter.objects.filter(
-                diagnosis=diagnosis, company=company
-            ).first()
-
             vehicle_questions = VehicleQuestions.objects.all()
             driver_questions = DriverQuestion.objects.all()
-            fleet_data = Fleet.objects.filter(diagnosis_counter=diagnosis_counter.id)
-            driver_data = Driver.objects.filter(diagnosis_counter=diagnosis_counter.id)
 
-            totals_vehicles = Fleet.objects.filter(
-                diagnosis_counter=diagnosis_counter.id
-            ).aggregate(
-                total_owned=Sum("quantity_owned"),
-                total_third_party=Sum("quantity_third_party"),
-                total_arrended=Sum("quantity_arrended"),
-                total_contractors=Sum("quantity_contractors"),
-                total_intermediation=Sum("quantity_intermediation"),
-                total_leasing=Sum("quantity_leasing"),
-                total_renting=Sum("quantity_renting"),
-            )
-            total_quantity_driver = (
-                Driver.objects.filter(diagnosis_counter=diagnosis_counter.id).aggregate(
-                    total_quantity=Sum("quantity")
-                )["total_quantity"]
-                or 0
-            )
-
-            # Extraer los valores y manejar casos en los que no haya registros
-            total_owned = totals_vehicles["total_owned"] or 0
-            total_third_party = totals_vehicles["total_third_party"] or 0
-            total_arrended = totals_vehicles["total_arrended"] or 0
-            total_contractors = totals_vehicles["total_contractors"] or 0
-            total_intermediation = totals_vehicles["total_intermediation"] or 0
-            total_leasing = totals_vehicles["total_leasing"] or 0
-            total_renting = totals_vehicles["total_renting"] or 0
-
-            # Calcular el total general sumando todos los totales parciales
-            total_general_vehicles = (
-                total_owned
-                + total_third_party
-                + total_arrended
-                + total_contractors
-                + total_intermediation
-                + total_leasing
-                + total_renting
-            )
             template_path = os.path.join(
                 settings.MEDIA_ROOT, "templates/DIAGNÓSTICO_BOLIVAR.docx"
             )
             doc = Document(template_path)
             month, year = get_current_month_and_year()
+            # Datos de la tabla
+            now = datetime.now()
+            formatted_date = now.strftime("%d-%m-%Y")
+            fecha = str(formatted_date)
+
             variables_to_change = {
                 "{{CRONOGRAMA}}": diagnosis.schedule,
                 "{{SECUENCIA}}": diagnosis.sequence,
-                "{{COMPANY_NAME}}": company.name.upper(),
-                "{{NIT}}": format_nit(company.nit),
                 "{{MES_ANNO}}": f"{month.upper()} {year}",
                 "{{CONSULTOR_NOMBRE}}": f"{diagnosis.consultor.first_name.upper()} {diagnosis.consultor.last_name.upper()}",
                 "{{LICENCIA_SST}}": (
@@ -789,15 +1006,16 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 ),
                 "{{MODE_PESV}}": diagnosis.mode_ejecution,
                 "{{TABLA_DIAGNOSTICO}}": "",
+                "{{SUMMARY_NOT_IN_CORPORATE_GROUPS}}": "",
                 "{{PLANEAR_TABLE}}": "",
                 "{{HACER_TABLE}}": "",
                 "{{VERIFICAR_TABLE}}": "",
                 "{{ACTUAR_TABLE}}": "",
-                "{{MISIONALIDAD_ID}}": str(company.mission.id),
-                "{{MISIONALIDAD_NAME}}": company.mission.name.upper(),
-                "{{NIVEL_PESV}}": diagnosis.type.name.upper(),
-                "{{QUANTITY_VEHICLES}}": str(total_general_vehicles),
-                "{{QUANTITY_DRIVERS}}": str(total_quantity_driver),
+                # "{{MISIONALIDAD_ID}}": str(company.mission.id),
+                # "{{MISIONALIDAD_NAME}}": company.mission.name.upper(),
+                # "{{NIVEL_PESV}}": diagnosis.type.name.upper(),
+                # "{{QUANTITY_VEHICLES}}": str(total_general_vehicles),
+                # "{{QUANTITY_DRIVERS}}": str(total_quantity_driver),
                 "{{CONCLUSIONES_TABLE}}": "",
                 "{{GRAPHIC_BAR}}": "",
                 "{{TOTALS_TABLE}}": "",
@@ -808,34 +1026,190 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 "{{TOTALS_ARTICULED}}": "",
             }
 
-            # Datos de la tabla
-            now = datetime.now()
-            formatted_date = now.strftime("%d-%m-%Y")
-            fecha = str(formatted_date)
-            empresa = company.name
-            nit = format_nit(company.nit)
-            actividades = "Ejemplo Actividades"
+            if diagnosis.is_for_corporate_group:
+                diagnosis_counter = Diagnosis_Counter.objects.filter(
+                    diagnosis=diagnosis
+                )
+                counter_ids = diagnosis_counter.values_list("id", flat=True)
+                fleet_totals_by_company = (
+                    Fleet.objects.filter(diagnosis_counter__in=counter_ids)
+                    .select_related("diagnosis_counter__company")
+                    .annotate(
+                        total_owned=Sum("quantity_owned"),
+                        total_third_party=Sum("quantity_third_party"),
+                        total_arrended=Sum("quantity_arrended"),
+                        total_contractors=Sum("quantity_contractors"),
+                        total_intermediation=Sum("quantity_intermediation"),
+                        total_leasing=Sum("quantity_leasing"),
+                        total_renting=Sum("quantity_renting"),
+                    )
+                    .order_by("diagnosis_counter__company")
+                )
+                # Agrupar los datos de Driver por empresa
+                driver_totals_by_company = (
+                    Driver.objects.filter(diagnosis_counter__in=counter_ids)
+                    .select_related("diagnosis_counter__company")
+                    .annotate(total_quantity=Sum("quantity"))
+                    .order_by("diagnosis_counter__company")
+                )
+                processed_companies = set()
+                company_totals = []
 
-            insert_table_after_placeholder(
-                doc,
-                "{{TABLA_DIAGNOSTICO}}",
-                fecha,
-                empresa,
-                nit,
-                actividades,
-                vehicle_questions,
-                fleet_data,
-                driver_questions,
-                driver_data,
-                diagnosis.type.name.upper(),
-                str(company.segment.name),
-                f"{company.dependant} - {company.dependant_position}".upper(),
-                company.acquired_certification or "",
-            )
+                for fleet_totals in fleet_totals_by_company:
+                    company = fleet_totals.diagnosis_counter.company
+                    if company in processed_companies:
+                        continue
+                    count_size = fleet_totals.diagnosis_counter.size
+                    driver_totals = next(
+                        (
+                            d
+                            for d in driver_totals_by_company
+                            if d.diagnosis_counter.company == company
+                        ),
+                        None,
+                    )
 
+                    # Extraer y manejar casos en los que no haya registros
+                    total_owned = fleet_totals.total_owned or 0
+                    total_third_party = fleet_totals.total_third_party or 0
+                    total_arrended = fleet_totals.total_arrended or 0
+                    total_contractors = fleet_totals.total_contractors or 0
+                    total_intermediation = fleet_totals.total_intermediation or 0
+                    total_leasing = fleet_totals.total_leasing or 0
+                    total_renting = fleet_totals.total_renting or 0
+                    total_quantity_driver = (
+                        driver_totals.total_quantity if driver_totals else 0
+                    )
+
+                    # Calcular el total general de vehículos para la empresa
+                    total_general_vehicles = (
+                        total_owned
+                        + total_third_party
+                        + total_arrended
+                        + total_contractors
+                        + total_intermediation
+                        + total_leasing
+                        + total_renting
+                    )
+
+                    # Agregar la información completa de la empresa y los totales a la lista de resultados agrupados
+                    company_totals.append(
+                        {
+                            "company": company,  # Aquí accedes a todos los campos de Company
+                            "count_size": count_size,  # Aquí accedes a todos los campos de Company
+                            "total_owned": total_owned,
+                            "total_third_party": total_third_party,
+                            "total_arrended": total_arrended,
+                            "total_contractors": total_contractors,
+                            "total_intermediation": total_intermediation,
+                            "total_leasing": total_leasing,
+                            "total_renting": total_renting,
+                            "total_general_vehicles": total_general_vehicles,
+                            "total_quantity_driver": total_quantity_driver,
+                        }
+                    )
+                    processed_companies.add(company)
+
+                variables_to_change["{{COMPANY_NAME}}"] = (
+                    diagnosis.corporate_group.name.upper()
+                )
+                variables_to_change["{{NIT}}"] = format_nit(
+                    diagnosis.corporate_group.nit
+                )
+                insert_tables_for_companies(
+                    doc,
+                    "{{TABLA_DIAGNOSTICO}}",
+                    company_totals,
+                    fecha,
+                    vehicle_questions,
+                    driver_questions,
+                    Fleet=Fleet,
+                    Driver=Driver,
+                    diagnosis=diagnosis,
+                )
+            else:
+
+                diagnosis_counter = Diagnosis_Counter.objects.filter(
+                    diagnosis=diagnosis, company=company
+                ).first()
+
+                fleet_data = Fleet.objects.filter(
+                    diagnosis_counter=diagnosis_counter.id
+                )
+                driver_data = Driver.objects.filter(
+                    diagnosis_counter=diagnosis_counter.id
+                )
+
+                totals_vehicles = Fleet.objects.filter(
+                    diagnosis_counter=diagnosis_counter.id
+                ).aggregate(
+                    total_owned=Sum("quantity_owned"),
+                    total_third_party=Sum("quantity_third_party"),
+                    total_arrended=Sum("quantity_arrended"),
+                    total_contractors=Sum("quantity_contractors"),
+                    total_intermediation=Sum("quantity_intermediation"),
+                    total_leasing=Sum("quantity_leasing"),
+                    total_renting=Sum("quantity_renting"),
+                )
+                total_quantity_driver = (
+                    Driver.objects.filter(
+                        diagnosis_counter=diagnosis_counter.id
+                    ).aggregate(total_quantity=Sum("quantity"))["total_quantity"]
+                    or 0
+                )
+
+                # Extraer los valores y manejar casos en los que no haya registros
+                total_owned = totals_vehicles["total_owned"] or 0
+                total_third_party = totals_vehicles["total_third_party"] or 0
+                total_arrended = totals_vehicles["total_arrended"] or 0
+                total_contractors = totals_vehicles["total_contractors"] or 0
+                total_intermediation = totals_vehicles["total_intermediation"] or 0
+                total_leasing = totals_vehicles["total_leasing"] or 0
+                total_renting = totals_vehicles["total_renting"] or 0
+
+                # Calcular el total general sumando todos los totales parciales
+                total_general_vehicles = (
+                    total_owned
+                    + total_third_party
+                    + total_arrended
+                    + total_contractors
+                    + total_intermediation
+                    + total_leasing
+                    + total_renting
+                )
+
+                nit = format_nit(company.nit)
+                summary = f"De acuerdo con la información anterior, se identifica que la empresa se encuentra en misionalidad {company.mission.id} | {company.mission.name.upper()} y que cuenta con {total_general_vehicles} vehículos propiedad de la empresa y {total_quantity_driver} personas con rol de conductor, por lo tanto, se define que debe diseñar e implementar un plan estratégico de seguridad vial “{diagnosis.type.name.upper()}”."
+
+                variables_to_change["{{COMPANY_NAME}}"] = company.name.upper()
+                variables_to_change["{{NIT}}"] = nit
+                variables_to_change["{{SUMMARY_NOT_IN_CORPORATE_GROUPS}}"] = summary
+
+                empresa = company.name
+                actividades = "Ejemplo Actividades"
+
+                insert_table_after_placeholder(
+                    doc,
+                    "{{TABLA_DIAGNOSTICO}}",
+                    fecha,
+                    empresa,
+                    nit,
+                    actividades,
+                    vehicle_questions,
+                    fleet_data,
+                    driver_questions,
+                    driver_data,
+                    diagnosis.type.name.upper(),
+                    str(company.segment.name),
+                    f"{company.dependant} - {company.dependant_position}".upper(),
+                    company.acquired_certification or "",
+                )
+
+            # De aqui para adelante todo sera igual para el informe ya que se maneja directamente el id del diagnostico
             datas_by_cycle = DiagnosisService.calculate_completion_percentage(
                 diagnosis.id
             )
+
             data_completion_percentage = (
                 DiagnosisService.calculate_completion_percentage_data(diagnosis.id)
             )
@@ -879,7 +1253,10 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             )  # Ordena por compliance_id
 
             insert_table_conclusion_percentage(
-                doc, "{{TOTALS_TABLE}}", compliance_counts, data_completion_percentage
+                doc,
+                "{{TOTALS_TABLE}}",
+                compliance_counts,
+                data_completion_percentage,
             )
 
             compliance_level = "NINGUNO"
@@ -963,6 +1340,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 data_completion_percentage
             )
             insert_table_recomendations(doc, "{{RECOMENDATIONS}}", resultado_final)
+
             replace_placeholders_in_document(doc, variables_to_change)
 
             buffer = BytesIO()
@@ -1001,14 +1379,16 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 "format_to_save"
             )  # Default to 'word'
 
-            try:
-                company = self.company_service.get_company(company_id)
-            except Company.DoesNotExist:
-                return Response(
-                    {"error": "Empresa no encontrada."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+            company = None
 
+            if int(company_id) > 0:
+                try:
+                    company = self.company_service.get_company(company_id)
+                except Company.DoesNotExist:
+                    return Response(
+                        {"error": "Empresa no encontrada."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
             get_use_case = GetUseCases(self.diagnosis_repository)
             if diagnosis_id > 0:
                 diagnosis = get_use_case.get_by_id(diagnosis_id)
@@ -1024,8 +1404,8 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             month, year = get_current_month_and_year()
 
             variables_to_change = {
-                "{{COMPANY_NAME}}": company.name.upper(),
-                "{{COMPANY_NIT}}": format_nit(company.nit),
+                "{{COMPANY_NAME}}": "",
+                "{{COMPANY_NIT}}": "",
                 "{{DATE_ELABORED}}": f"{month.upper()} {year}",
                 "{{CONSULTOR_NAME}}": f"{diagnosis.consultor.first_name.upper()} {diagnosis.consultor.last_name.upper()}",
                 "{{SST_LICENSE}}": (
@@ -1036,6 +1416,16 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 "{{NIVEL_PESV}}": diagnosis.type.name.upper(),
                 "{{GENERAL_TABLE}}": "",
             }
+            if diagnosis.is_for_corporate_group:
+                variables_to_change["{{COMPANY_NAME}}"] = (
+                    diagnosis.corporate_group.name.upper()
+                )
+                variables_to_change["{{COMPANY_NIT}}"] = format_nit(
+                    diagnosis.corporate_group.nit
+                )
+            else:
+                variables_to_change["{{COMPANY_NAME}}"] = company.name.upper()
+                variables_to_change["{{COMPANY_NIT}}"] = format_nit(company.nit)
 
             # Filtrar los Checklist_Requirement que tienen compliance con ID 2
             checklist_requirements = Checklist_Requirement.objects.filter(
@@ -1112,17 +1502,18 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     def radarChart(self, request: Request):
         company_id = request.query_params.get("company_id")
         diagnosis_id = int(request.query_params.get("diagnosis"))
-        try:
-            company = self.company_service.get_company(company_id)
-        except Company.DoesNotExist:
-            return Response(
-                {"error": "Empresa no encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+
         get_use_case = GetUseCases(self.diagnosis_repository)
         if diagnosis_id > 0:
             diagnosis = get_use_case.get_by_id(diagnosis_id)
         else:
+            try:
+                company = self.company_service.get_company(company_id)
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Empresa no encontrada."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
 
         datas_by_cycle = DiagnosisService.calculate_completion_percentage(diagnosis.id)
@@ -1139,17 +1530,18 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     def tableReport(self, request: Request):
         company_id = request.query_params.get("company_id")
         diagnosis_id = int(request.query_params.get("diagnosis"))
-        try:
-            company = self.company_service.get_company(company_id)
-        except Company.DoesNotExist:
-            return Response(
-                {"error": "Empresa no encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+
         get_use_case = GetUseCases(self.diagnosis_repository)
         if diagnosis_id > 0:
             diagnosis = get_use_case.get_by_id(diagnosis_id)
         else:
+            try:
+                company = self.company_service.get_company(company_id)
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Empresa no encontrada."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
 
         datas_by_cycle = DiagnosisService.calculate_completion_percentage(diagnosis.id)
@@ -1159,17 +1551,18 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     def tableReportTotal(self, request: Request):
         company_id = request.query_params.get("company_id")
         diagnosis_id = int(request.query_params.get("diagnosis"))
-        try:
-            company = self.company_service.get_company(company_id)
-        except Company.DoesNotExist:
-            return Response(
-                {"error": "Empresa no encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+
         get_use_case = GetUseCases(self.diagnosis_repository)
         if diagnosis_id > 0:
             diagnosis = get_use_case.get_by_id(diagnosis_id)
         else:
+            try:
+                company = self.company_service.get_company(company_id)
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Empresa no encontrada."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(company.id)
 
         percentage_success = DiagnosisService.calculate_completion_percentage_data(
@@ -1220,11 +1613,71 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         )
         return Response(data)
 
+    @action(detail=False)
+    def compliance_trend(self, request: Request):
+        checklists = CheckList.objects.all()
+        # Agrupar por fecha y calcular porcentaje de cumplimiento
+        trend_data = (
+            checklists.values("diagnosis__date_elabored")
+            .annotate(
+                total_count=Count("id"),
+                fulfilled_count=Count("id", filter=Q(obtained_value__gt=0)),
+            )
+            .order_by("diagnosis__date_elabored")
+        )
+
+        # Formatear los datos para el gráfico
+        formatted_data = [
+            {
+                "date": record["diagnosis__date_elabored"],
+                "fulfilled_percentage": round(
+                    (record["fulfilled_count"] / record["total_count"]) * 100, 2
+                ),
+            }
+            for record in trend_data
+        ]
+
+        return Response(formatted_data, status=status.HTTP_200_OK)
+
     def get_queryset(self):
-        diagnosis_id = self.request.query_params.get("diagnosis")
+        diagnosis_id = self.request.data.get("diagnosis")
         if diagnosis_id is not None:
             return Diagnosis.objects.filter(pk=diagnosis_id)
         return Diagnosis.objects.all()
+
+    def retrieve(self, request: Request, pk=None, *args, **kwargs):
+        """
+        Obtiene un diagnositco específica por su ID.
+        """
+        corporate_group_id = request.query_params.get("corporate_group")
+        pk = self.kwargs.get("pk")
+        use_case = GetUseCases(self.diagnosis_repository)
+        try:
+            if corporate_group_id:
+                corporate_group = self.corporate_group_repository.get_by_id(
+                    corporate_group_id
+                )
+            else:
+                corporate_group = None
+
+            if int(pk) > 0:
+                # Obtener el objeto según el ID
+                instance = self.get_object()
+                # Devolver una respuesta con los datos serializados
+            else:
+                if corporate_group:
+                    instance = use_case.get_by_corporate(corporate_group.id)
+                else:
+                    instance = self.get_object()
+
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data)
+
+        except Diagnosis.DoesNotExist:
+            # Manejar el caso en que la empresa no se encuentra
+            return Response(
+                {"error": "El diagnostico no existe."}, status=status.HTTP_404_NOT_FOUND
+            )
 
 
 @api_view(["POST"])
