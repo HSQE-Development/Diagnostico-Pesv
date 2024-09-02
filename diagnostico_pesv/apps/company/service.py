@@ -32,7 +32,7 @@ class CompanyService:
             misionality_criteria = MisionalitySizeCriteria.objects.filter(
                 mission_id=mission_id
             )
-
+            selected_size = None
             for criteria in misionality_criteria:
                 size_criteria = criteria.criteria
 
@@ -47,10 +47,17 @@ class CompanyService:
                     <= total_drivers
                     <= (size_criteria.driver_max or float("inf"))
                 )
-
-                # Si cualquiera de las condiciones es verdadera, devolver el tamaño correspondiente
-                if vehicle_in_range or driver_in_range:
+                # Si ambos criterios se cumplen, devolvemos el tamaño mayor
+                if vehicle_in_range and driver_in_range:
                     return criteria.size.id
+
+                # Si solo uno de los criterios se cumple, guardamos temporalmente el tamaño
+                if vehicle_in_range or driver_in_range:
+                    selected_size = criteria.size.id
+
+            # Si se encontró al menos un criterio que coincida, devolvemos el tamaño seleccionado
+            if selected_size:
+                return selected_size
 
             raise ValueError(
                 f"No se pudo determinar el tamaño de la organización para mission_id={mission_id} con total_vehicles={total_vehicles} y total_drivers={total_drivers}."

@@ -16,6 +16,17 @@ from tempfile import NamedTemporaryFile
 from docx2pdf import convert
 
 
+def apply_bullets(paragraph):
+    """Aplica viñetas al párrafo usando XML."""
+    p = paragraph._element
+    pPr = p.get_or_add_pPr()
+    numPr = OxmlElement("w:numPr")
+    numId = OxmlElement("w:numId")
+    numId.set(qn("w:val"), "1")  # Utiliza el ID de numeración predeterminado
+    numPr.append(numId)
+    pPr.append(numPr)
+
+
 def add_title(doc: Document, title_text: str):
     # Agregar un párrafo con el estilo de título
     title_paragraph = doc.add_paragraph(title_text, style="Body Text")
@@ -289,6 +300,7 @@ def insert_table_after_placeholder(
     segment,
     contact,
     certification,
+    ciius,
 ):
     """
     Inserta una tabla en el documento justo después del párrafo que contiene el placeholder.
@@ -342,7 +354,13 @@ def insert_table_after_placeholder(
             row_cells[2].merge(row_cells[5])
             row_cells[6].text = "Actividades"
             row_cells[6].merge(row_cells[7])
-            row_cells[8].text = actividades
+            activities_cell = row_cells[8]
+            activities_cell.add_paragraph()
+            # Añadir cada Ciiu como ítem en la lista
+            for ciiu in ciius.all():
+                bullet_paragraph = activities_cell.add_paragraph()
+                bullet_paragraph.text = f"{ciiu.code} - {ciiu.name}"
+                apply_bullets(bullet_paragraph)
             row_cells[8].merge(row_cells[11])
             for cell in row_cells:
                 align_cell_text(cell, "left")
@@ -599,7 +617,13 @@ def insert_tables_for_companies(
                 row_cells[2].merge(row_cells[5])
                 row_cells[6].text = "Actividades"
                 row_cells[6].merge(row_cells[7])
-                row_cells[8].text = "actividades"
+                activities_cell = row_cells[8]
+                activities_cell.add_paragraph()
+                # Añadir cada Ciiu como ítem en la lista
+                for ciiu in company.ciius.all():
+                    bullet_paragraph = activities_cell.add_paragraph()
+                    bullet_paragraph.text = f"{ciiu.code} - {ciiu.name}"
+                    apply_bullets(bullet_paragraph)
                 row_cells[8].merge(row_cells[11])
                 for cell in row_cells:
                     align_cell_text(cell, "left")
@@ -659,10 +683,12 @@ def insert_tables_for_companies(
                     set_cell_text_color(cell)
 
                 fleet_data = Fleet.objects.filter(
-                    diagnosis_counter__company=company, diagnosis_counter__diagnosis=diagnosis
+                    diagnosis_counter__company=company,
+                    diagnosis_counter__diagnosis=diagnosis,
                 )
                 driver_data = Driver.objects.filter(
-                    diagnosis_counter__company=company, diagnosis_counter__diagnosis=diagnosis
+                    diagnosis_counter__company=company,
+                    diagnosis_counter__diagnosis=diagnosis,
                 )
                 # Variables para almacenar los totales
                 total_propio = 0
@@ -879,17 +905,6 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
                             question_number += 1
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
-
-
-def apply_bullets(paragraph):
-    """Aplica viñetas al párrafo usando XML."""
-    p = paragraph._element
-    pPr = p.get_or_add_pPr()
-    numPr = OxmlElement("w:numPr")
-    numId = OxmlElement("w:numId")
-    numId.set(qn("w:val"), "1")  # Utiliza el ID de numeración predeterminado
-    numPr.append(numId)
-    pPr.append(numPr)
 
 
 def insert_table_recomendations(

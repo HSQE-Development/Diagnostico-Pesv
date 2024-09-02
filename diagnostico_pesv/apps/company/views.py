@@ -67,7 +67,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
             # Validate using external service methods
             CompanyService.validate_nit(transformed_data.get("nit"))
-            CompanyService.validate_consultor(transformed_data.get("consultor"))
 
             # Save the new Company instance
             self.perform_create(serializer)

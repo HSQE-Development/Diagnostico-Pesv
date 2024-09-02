@@ -14,6 +14,7 @@ from django.db import transaction
 from apps.diagnosis.models import Diagnosis
 from http import HTTPMethod
 import traceback
+from django.db.models import Q
 
 
 class CustomPagination(PageNumberPagination):
@@ -58,6 +59,7 @@ class CorporateGroupViewSet(viewsets.ModelViewSet):
         )  # Para evitar dependencias circulares
 
         corporate_id = request.query_params.get("corporate", 0)
+        search = request.query_params.get("search", "")
         try:
             corporate = Corporate.objects.get(id=corporate_id)
         except Corporate.DoesNotExist:
@@ -72,7 +74,11 @@ class CorporateGroupViewSet(viewsets.ModelViewSet):
                 corporate=corporate
             ).values_list("company_id", flat=True)
         ).distinct()  # Usar distinct() para evitar duplicados
-
+        # Aplicar filtro de búsqueda
+        if search:
+            companies_not_in_corporate = companies_not_in_corporate.filter(
+                Q(name__icontains=search) | Q(nit__icontains=search)
+            )
         # Aplicar paginación
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(companies_not_in_corporate, request)

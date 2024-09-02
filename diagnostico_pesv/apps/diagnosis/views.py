@@ -69,6 +69,7 @@ from django.db.models import (
     CharField,
     Value,
     F,
+    Max,
 )
 from apps.sign.models import User
 from utils.constants import ComplianceIds
@@ -579,41 +580,22 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
 
             diagnosis = use_case.get_by_corporate(corporate_group.id)
 
-            company_totals = (
-                Diagnosis_Counter.objects.filter(diagnosis=diagnosis.id)
-                .values("company")
-                .annotate(
-                    total_vehicles=Sum(
-                        F("fleet__quantity_owned")
-                        + F("fleet__quantity_third_party")
-                        + F("fleet__quantity_arrended")
-                        + F("fleet__quantity_contractors")
-                        + F("fleet__quantity_intermediation")
-                        + F("fleet__quantity_leasing")
-                        + F("fleet__quantity_renting")
-                        + F("fleet__quantity_employees")
-                    ),
-                    total_drivers=Sum("driver__quantity"),
+            if not diagnosis:
+                return Response(
+                    {"error": "No se ha realizado el conteo de las empresas."},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
+            max_size_subquery = (
+                Diagnosis_Counter.objects.filter(diagnosis=OuterRef("diagnosis"))
+                .order_by("-size")
+                .values("size")[:1]
             )
-            highest_company = None
-            highest_size = None
-            for company_total in company_totals:
-                company_id = company_total["company"]
-                company = Company.objects.get(id=company_id)
-                total_vehicles = company_total["total_vehicles"] or 0
-                total_drivers = company_total["total_drivers"] or 0
-                size_and_type = self.company_service.update_company_size(
-                    company, total_vehicles, total_drivers
-                )
-                # Comparar con el tamaño más alto encontrado hasta ahora
-                if highest_size is None or size_and_type.id > highest_size:
-                    highest_size = size_and_type.id
-                    highest_company = company
+            record_with_max_size = Diagnosis_Counter.objects.filter(
+                diagnosis=diagnosis.id, size=Subquery(max_size_subquery)
+            ).first()
 
-            corporate_group.nit = highest_company.nit
-            company_size = CompanySize.objects.get(id=highest_size)
-            diagnosis.type = company_size
+            corporate_group.nit = record_with_max_size.company.nit
+            diagnosis.type = record_with_max_size.size
 
             diagnosis_requirement_use_case = DiagnosisRequirementUseCases(
                 self.diagnosis_requirement_repository
@@ -677,11 +659,12 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                         get_use_case.get_unfinalized_diagnosis_for_company(company.id)
                     )
                     # Se debe finalizar cuando se cree un nuevo diagnostico no cuando se responda!!!
-                    existing_diagnosis.is_finalized = True
-                    update_diagnosis_use_case = UpdateDiagnosis(
-                        self.diagnosis_repository, existing_diagnosis
-                    )
-                    update_diagnosis_use_case.execute()
+                    if existing_diagnosis:
+                        existing_diagnosis.is_finalized = True
+                        update_diagnosis_use_case = UpdateDiagnosis(
+                            self.diagnosis_repository, existing_diagnosis
+                        )
+                        update_diagnosis_use_case.execute()
 
                     create_diagnosis = CreateDiagnosis(
                         self.diagnosis_repository,
@@ -711,6 +694,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     company.size = size_and_type
                     diagnosis.type = size_and_type
                     diagnosis.diagnosis_step = 1
+                    diagnosis.in_progress = True
                     diagnosis.save()
 
                     diagnosis_requirement_use_case = DiagnosisRequirementUseCases(
@@ -762,6 +746,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             company_id = diagnosis_data["company"]
             consultor_id = diagnosis_data["consultor"]
             diagnosis_id = int(request.query_params.get("diagnosis"))
+            ejecution = diagnosis_data["mode_ejecution"]
 
             try:
                 consultor = User.objects.get(pk=consultor_id)
@@ -926,6 +911,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 if consultor.id != diagnosis.consultor.id:
                     diagnosis.consultor = consultor
                 diagnosis.in_progress = False
+                diagnosis.mode_ejecution = ejecution
                 diagnosis.save()
 
                 return Response(
@@ -1203,6 +1189,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     str(company.segment.name),
                     f"{company.dependant} - {company.dependant_position}".upper(),
                     company.acquired_certification or "",
+                    company.ciius,
                 )
 
             # De aqui para adelante todo sera igual para el informe ya que se maneja directamente el id del diagnostico
@@ -1604,35 +1591,49 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     @action(detail=False)
-    def count_diagnosis_by_consultor_by_mode_ejecution(self, request: Request):
-        consultor_id = request.query_params.get("consultor")
+    def count_diagnosis_by_consultors(self, request: Request):
         data = (
-            Diagnosis.objects.filter(consultor__id=consultor_id)
-            .values("consultor__id", "consultor__username", "mode_ejecution")
+            Diagnosis.objects.all()
+            .values("consultor__id", "consultor__username")
             .annotate(total=Count("id"))
         )
         return Response(data)
 
     @action(detail=False)
+    def count_diagnosis_by_consultor_by_mode_ejecution(self, request: Request):
+        consultor_id = request.query_params.get("consultor")
+        if consultor_id:
+            data = (
+                Diagnosis.objects.filter(consultor__id=consultor_id)
+                .values("consultor__id", "consultor__username", "mode_ejecution")
+                .annotate(total=Count("id"))
+            )
+        else:
+            data = (
+                Diagnosis.objects.all()
+                .values("consultor__id", "consultor__username", "mode_ejecution")
+                .annotate(total=Count("id"))
+            )
+        return Response(data)
+
+    @action(detail=False)
     def compliance_trend(self, request: Request):
-        checklists = CheckList.objects.all()
+        diagnosis = Diagnosis.objects.all()
         # Agrupar por fecha y calcular porcentaje de cumplimiento
         trend_data = (
-            checklists.values("diagnosis__date_elabored")
+            diagnosis.values("date_elabored")
             .annotate(
                 total_count=Count("id"),
-                fulfilled_count=Count("id", filter=Q(obtained_value__gt=0)),
+                fulfilled_count=Count("id"),
             )
-            .order_by("diagnosis__date_elabored")
+            .order_by("date_elabored")
         )
 
         # Formatear los datos para el gráfico
         formatted_data = [
             {
-                "date": record["diagnosis__date_elabored"],
-                "fulfilled_percentage": round(
-                    (record["fulfilled_count"] / record["total_count"]) * 100, 2
-                ),
+                "date": record["date_elabored"],
+                "fulfilled_percentage": record["total_count"],
             }
             for record in trend_data
         ]
