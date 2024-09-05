@@ -17,7 +17,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from apps.diagnosis_requirement.core.models import (
     Diagnosis_Requirement,
-    Recomendation,
     WorkPlan_Recomendation,
 )
 from apps.diagnosis_requirement.infraestructure.serializers import (
@@ -28,8 +27,6 @@ from .models import (
     CheckList,
     Diagnosis,
     Checklist_Requirement,
-    VehicleQuestions,
-    DriverQuestion,
 )
 from .serializers import (
     Diagnosis_QuestionsSerializer,
@@ -44,9 +41,8 @@ from docx import Document
 from io import BytesIO
 from django.conf import settings
 from .helper import *
-from django.db.models import Sum, Count
 from collections import defaultdict
-from .services import DiagnosisService
+from .services import DiagnosisService, GenerateReport
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status, viewsets
 from http import HTTPMethod
@@ -59,23 +55,12 @@ from apps.diagnosis_requirement.application.use_cases import (
 from apps.diagnosis_requirement.infraestructure.repositories import (
     DiagnosisRequirementRepository,
 )
-from django.db.models import (
-    Prefetch,
-    OuterRef,
-    Subquery,
-    Q,
-    Case,
-    When,
-    CharField,
-    Value,
-    F,
-    Max,
-)
+from django.db.models import Prefetch, OuterRef, Subquery, Q, Sum, Count
 from apps.sign.models import User
 from utils.constants import ComplianceIds
 from collections import OrderedDict
 from apps.corporate_group.repositories import CorporateGroupRepository
-from rest_framework.exceptions import NotFound
+from django.core.mail import EmailMessage
 
 
 def remove_invalid_requirements(diagnosis_id, valid_requirements):
@@ -96,12 +81,14 @@ def remove_invalid_requirements(diagnosis_id, valid_requirements):
                 Checklist_Requirement.objects.filter(
                     diagnosis=diagnosis_id, requirement_id__in=invalid_requirements
                 ).delete(hard=True)
+
                 questions = Diagnosis_Questions.objects.filter(
                     requirement_id__in=invalid_requirements
                 )
+                print(questions)
                 for question in questions:
                     CheckList.objects.filter(
-                        question_id=question.id, diagnosis=diagnosis_id
+                        question=question.id, diagnosis=diagnosis_id
                     ).delete(hard=True)
 
     except CompanySize.DoesNotExist:
@@ -303,15 +290,6 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             requirements = Diagnosis_Requirement.objects.filter(
                 id__in=diagnosis_requirements.values_list("requirement", flat=True)
             ).prefetch_related(Prefetch("requirements", queryset=questions_queryset))
-            # diagnosis_questions = (
-            #     Diagnosis_Questions.objects.filter(
-            #         requirement__in=diagnosis_requirements.values_list(
-            #             "requirement", flat=True
-            #         )
-            #     )
-            #     .select_related("requirement")
-            #     .order_by("requirement__step")
-            # )
 
             if group_by_step:
                 if diagnosis_id > 0:
@@ -327,11 +305,6 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     )
 
                 return Response(grouped_questions, status=status.HTTP_200_OK)
-            # else:
-            #     serialized_questions = Diagnosis_QuestionsSerializer(
-            #         diagnosis_questions, many=True
-            #     )
-            #     return Response(serialized_questions.data, status=status.HTTP_200_OK)
 
         except Exception as ex:
             # logger.error(f"Error en findQuestionsByCompanySize: {str(ex)}")
@@ -381,10 +354,10 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     )
                     get_compliance = GetComplianceById(self.compliance_repository, 2)
                     compliance = get_compliance.execute()
-
                     remove_invalid_requirements(
                         diagnosis_id=diagnosis.id, valid_requirements=requirements
                     )
+                    # if not CheckList.objects.filter(diagnosis=diagnosis).exists():
 
                     for requirement_id in missing_requirements:
                         Checklist_Requirement.objects.create(
@@ -393,17 +366,21 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                             compliance=compliance,  # Ajusta el valor según sea necesario
                             observation=None,  # Ajusta el valor según sea necesario
                         )
-
                         questions = Diagnosis_Questions.objects.filter(
-                            requirement_id=requirement_id
+                            requirement=requirement_id
                         )
                         for question in questions:
-                            CheckList.objects.create(
-                                question=question,
-                                compliance=compliance,
-                                diagnosis=diagnosis,
-                                obtained_value=0,
-                            )
+                            if not CheckList.objects.filter(
+                                diagnosis=diagnosis, question=question
+                            ).exists():
+                                checklist = CheckList(
+                                    question=question,
+                                    compliance=compliance,
+                                    diagnosis=diagnosis,
+                                    obtained_value=0,
+                                )
+                                checklist.save()
+
                     diagnosis.diagnosis_step = 1
 
                 if observation:
@@ -928,15 +905,6 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=[HTTPMethod.POST])
     def generateReport(self, request: Request):
-
-        # Solo intenta importar pythoncom si el sistema operativo es Windows
-        if platform.system() == "Windows":
-            try:
-                import pythoncom
-
-                pythoncom.CoInitialize()
-            except Exception as e:
-                print(f"Error al inicializar COM: {e}")
         try:
             company_id = request.query_params.get("company")
             schedule = request.query_params.get("schedule")
@@ -946,7 +914,6 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 "format_to_save"
             )  # Default to 'word'
             company = None
-
             if int(company_id) > 0:
                 try:
                     company = self.company_service.get_company(company_id)
@@ -955,7 +922,6 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                         {"error": "Empresa no encontrada."},
                         status=status.HTTP_404_NOT_FOUND,
                     )
-
             get_use_case = GetUseCases(self.diagnosis_repository)
             if int(diagnosis_id) > 0:
                 diagnosis = get_use_case.get_by_id(diagnosis_id)
@@ -963,383 +929,13 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                 diagnosis = get_use_case.get_unfinalized_diagnosis_for_company(
                     company.id
                 )
-
-            diagnosis.schedule = schedule
-            diagnosis.sequence = sequence
-            diagnosis.save()
-            vehicle_questions = VehicleQuestions.objects.all()
-            driver_questions = DriverQuestion.objects.all()
-
-            template_path = os.path.join(
-                settings.MEDIA_ROOT, "templates/DIAGNÓSTICO_BOLIVAR.docx"
+            generate_report = GenerateReport(
+                company=company,
+                diagnosis=diagnosis,
+                schedule=schedule,
+                sequence=sequence,
             )
-            doc = Document(template_path)
-            month, year = get_current_month_and_year()
-            # Datos de la tabla
-            now = datetime.now()
-            formatted_date = now.strftime("%d-%m-%Y")
-            fecha = str(formatted_date)
-
-            variables_to_change = {
-                "{{CRONOGRAMA}}": diagnosis.schedule,
-                "{{SECUENCIA}}": diagnosis.sequence,
-                "{{MES_ANNO}}": f"{month.upper()} {year}",
-                "{{CONSULTOR_NOMBRE}}": f"{diagnosis.consultor.first_name.upper()} {diagnosis.consultor.last_name.upper()}",
-                "{{LICENCIA_SST}}": (
-                    diagnosis.consultor.licensia_sst
-                    if diagnosis.consultor.licensia_sst is not None
-                    else "SIN LICENCIA"
-                ),
-                "{{MODE_PESV}}": diagnosis.mode_ejecution,
-                "{{TABLA_DIAGNOSTICO}}": "",
-                "{{SUMMARY_NOT_IN_CORPORATE_GROUPS}}": "",
-                "{{PLANEAR_TABLE}}": "",
-                "{{HACER_TABLE}}": "",
-                "{{VERIFICAR_TABLE}}": "",
-                "{{ACTUAR_TABLE}}": "",
-                # "{{MISIONALIDAD_ID}}": str(company.mission.id),
-                # "{{MISIONALIDAD_NAME}}": company.mission.name.upper(),
-                # "{{NIVEL_PESV}}": diagnosis.type.name.upper(),
-                # "{{QUANTITY_VEHICLES}}": str(total_general_vehicles),
-                # "{{QUANTITY_DRIVERS}}": str(total_quantity_driver),
-                "{{CONCLUSIONES_TABLE}}": "",
-                "{{GRAPHIC_BAR}}": "",
-                "{{TOTALS_TABLE}}": "",
-                "{{GRAPHIC_RADAR}}": "",
-                "{{RECOMENDATIONS}}": "",
-                "{{PERCENTAGE_TOTAL}}": "",
-                "{{ARTICULED_TABLE}}": "",
-                "{{TOTALS_ARTICULED}}": "",
-            }
-
-            if diagnosis.is_for_corporate_group:
-                diagnosis_counter = Diagnosis_Counter.objects.filter(
-                    diagnosis=diagnosis
-                )
-                counter_ids = diagnosis_counter.values_list("id", flat=True)
-                fleet_totals_by_company = (
-                    Fleet.objects.filter(diagnosis_counter__in=counter_ids)
-                    .select_related("diagnosis_counter__company")
-                    .annotate(
-                        total_owned=Sum("quantity_owned"),
-                        total_third_party=Sum("quantity_third_party"),
-                        total_arrended=Sum("quantity_arrended"),
-                        total_contractors=Sum("quantity_contractors"),
-                        total_intermediation=Sum("quantity_intermediation"),
-                        total_leasing=Sum("quantity_leasing"),
-                        total_renting=Sum("quantity_renting"),
-                    )
-                    .order_by("diagnosis_counter__company")
-                )
-                # Agrupar los datos de Driver por empresa
-                driver_totals_by_company = (
-                    Driver.objects.filter(diagnosis_counter__in=counter_ids)
-                    .select_related("diagnosis_counter__company")
-                    .annotate(total_quantity=Sum("quantity"))
-                    .order_by("diagnosis_counter__company")
-                )
-                processed_companies = set()
-                company_totals = []
-
-                for fleet_totals in fleet_totals_by_company:
-                    company = fleet_totals.diagnosis_counter.company
-                    if company in processed_companies:
-                        continue
-                    count_size = fleet_totals.diagnosis_counter.size
-                    driver_totals = next(
-                        (
-                            d
-                            for d in driver_totals_by_company
-                            if d.diagnosis_counter.company == company
-                        ),
-                        None,
-                    )
-
-                    # Extraer y manejar casos en los que no haya registros
-                    total_owned = fleet_totals.total_owned or 0
-                    total_third_party = fleet_totals.total_third_party or 0
-                    total_arrended = fleet_totals.total_arrended or 0
-                    total_contractors = fleet_totals.total_contractors or 0
-                    total_intermediation = fleet_totals.total_intermediation or 0
-                    total_leasing = fleet_totals.total_leasing or 0
-                    total_renting = fleet_totals.total_renting or 0
-                    total_quantity_driver = (
-                        driver_totals.total_quantity if driver_totals else 0
-                    )
-
-                    # Calcular el total general de vehículos para la empresa
-                    total_general_vehicles = (
-                        total_owned
-                        + total_third_party
-                        + total_arrended
-                        + total_contractors
-                        + total_intermediation
-                        + total_leasing
-                        + total_renting
-                    )
-
-                    # Agregar la información completa de la empresa y los totales a la lista de resultados agrupados
-                    company_totals.append(
-                        {
-                            "company": company,  # Aquí accedes a todos los campos de Company
-                            "count_size": count_size,  # Aquí accedes a todos los campos de Company
-                            "total_owned": total_owned,
-                            "total_third_party": total_third_party,
-                            "total_arrended": total_arrended,
-                            "total_contractors": total_contractors,
-                            "total_intermediation": total_intermediation,
-                            "total_leasing": total_leasing,
-                            "total_renting": total_renting,
-                            "total_general_vehicles": total_general_vehicles,
-                            "total_quantity_driver": total_quantity_driver,
-                        }
-                    )
-                    processed_companies.add(company)
-
-                variables_to_change["{{COMPANY_NAME}}"] = (
-                    diagnosis.corporate_group.name.upper()
-                )
-                variables_to_change["{{NIT}}"] = format_nit(
-                    diagnosis.corporate_group.nit
-                )
-                insert_tables_for_companies(
-                    doc,
-                    "{{TABLA_DIAGNOSTICO}}",
-                    company_totals,
-                    fecha,
-                    vehicle_questions,
-                    driver_questions,
-                    Fleet=Fleet,
-                    Driver=Driver,
-                    diagnosis=diagnosis,
-                )
-            else:
-
-                diagnosis_counter = Diagnosis_Counter.objects.filter(
-                    diagnosis=diagnosis, company=company
-                ).first()
-
-                fleet_data = Fleet.objects.filter(
-                    diagnosis_counter=diagnosis_counter.id
-                )
-                driver_data = Driver.objects.filter(
-                    diagnosis_counter=diagnosis_counter.id
-                )
-
-                totals_vehicles = Fleet.objects.filter(
-                    diagnosis_counter=diagnosis_counter.id
-                ).aggregate(
-                    total_owned=Sum("quantity_owned"),
-                    total_third_party=Sum("quantity_third_party"),
-                    total_arrended=Sum("quantity_arrended"),
-                    total_contractors=Sum("quantity_contractors"),
-                    total_intermediation=Sum("quantity_intermediation"),
-                    total_leasing=Sum("quantity_leasing"),
-                    total_renting=Sum("quantity_renting"),
-                )
-                total_quantity_driver = (
-                    Driver.objects.filter(
-                        diagnosis_counter=diagnosis_counter.id
-                    ).aggregate(total_quantity=Sum("quantity"))["total_quantity"]
-                    or 0
-                )
-
-                # Extraer los valores y manejar casos en los que no haya registros
-                total_owned = totals_vehicles["total_owned"] or 0
-                total_third_party = totals_vehicles["total_third_party"] or 0
-                total_arrended = totals_vehicles["total_arrended"] or 0
-                total_contractors = totals_vehicles["total_contractors"] or 0
-                total_intermediation = totals_vehicles["total_intermediation"] or 0
-                total_leasing = totals_vehicles["total_leasing"] or 0
-                total_renting = totals_vehicles["total_renting"] or 0
-
-                # Calcular el total general sumando todos los totales parciales
-                total_general_vehicles = (
-                    total_owned
-                    + total_third_party
-                    + total_arrended
-                    + total_contractors
-                    + total_intermediation
-                    + total_leasing
-                    + total_renting
-                )
-
-                nit = format_nit(company.nit)
-                summary = f"De acuerdo con la información anterior, se identifica que la empresa se encuentra en misionalidad {company.mission.id} | {company.mission.name.upper()} y que cuenta con {total_general_vehicles} vehículos propiedad de la empresa y {total_quantity_driver} personas con rol de conductor, por lo tanto, se define que debe diseñar e implementar un plan estratégico de seguridad vial “{diagnosis.type.name.upper()}”."
-
-                variables_to_change["{{COMPANY_NAME}}"] = company.name.upper()
-                variables_to_change["{{NIT}}"] = nit
-                variables_to_change["{{SUMMARY_NOT_IN_CORPORATE_GROUPS}}"] = summary
-
-                empresa = company.name
-                actividades = "Ejemplo Actividades"
-
-                insert_table_after_placeholder(
-                    doc,
-                    "{{TABLA_DIAGNOSTICO}}",
-                    fecha,
-                    empresa,
-                    nit,
-                    actividades,
-                    vehicle_questions,
-                    fleet_data,
-                    driver_questions,
-                    driver_data,
-                    diagnosis.type.name.upper(),
-                    str(company.segment.name),
-                    f"{company.dependant} - {company.dependant_position}".upper(),
-                    company.acquired_certification or "",
-                    company.ciius,
-                )
-
-            # De aqui para adelante todo sera igual para el informe ya que se maneja directamente el id del diagnostico
-            datas_by_cycle = DiagnosisService.calculate_completion_percentage(
-                diagnosis.id
-            )
-
-            data_completion_percentage = (
-                DiagnosisService.calculate_completion_percentage_data(diagnosis.id)
-            )
-            filter_cycles = ["P", "H", "V", "A"]
-            placeholders = {
-                "P": "{{PLANEAR_TABLE}}",
-                "H": "{{HACER_TABLE}}",
-                "V": "{{VERIFICAR_TABLE}}",
-                "A": "{{ACTUAR_TABLE}}",
-            }
-
-            for f_cycle in filter_cycles:
-                filtered_data = [
-                    cycle for cycle in datas_by_cycle if cycle["cycle"] == f_cycle
-                ]
-                insert_table_results(doc, placeholders[f_cycle], filtered_data)
-
-            insert_table_conclusion(
-                doc,
-                "{{CONCLUSIONES_TABLE}}",
-                datas_by_cycle,
-                diagnosis.type.name.upper(),
-            )
-            # insert_table_conclusion_articulated(
-            #     doc, "{{ARTICULED_TABLE}}", datas_by_cycle, company.size.name.upper()
-            # )
-            insert_table_conclusion_percentage_articuled(
-                doc, "{{TOTALS_ARTICULED}}", datas_by_cycle
-            )
-            compliance_counts = Compliance.objects.annotate(
-                count=Subquery(
-                    CheckList.objects.filter(
-                        diagnosis=diagnosis.id, compliance_id=OuterRef("pk")
-                    )
-                    .values("compliance_id")
-                    .annotate(count=Count("id"))
-                    .values("count")
-                )
-            ).order_by(
-                "id"
-            )  # Ordena por compliance_id
-
-            insert_table_conclusion_percentage(
-                doc,
-                "{{TOTALS_TABLE}}",
-                compliance_counts,
-                data_completion_percentage,
-            )
-
-            compliance_level = "NINGUNO"
-            if data_completion_percentage < 50:
-                compliance_level = "BAJO"
-            elif data_completion_percentage >= 50 and data_completion_percentage < 80:
-                compliance_level = "MEDIO"
-            elif data_completion_percentage > 80:
-                compliance_level = "ALTO"
-
-            variables_to_change["{{COMPLIANCE_LEVEL}}"] = compliance_level
-            # insert_image_after_placeholder(
-            #     doc, "{{GRAPHIC_BAR}}", create_bar_chart(datas_by_cycle)
-            # )
-            insert_image_after_placeholder(
-                doc, "{{GRAPHIC_RADAR }}", create_radar_chart(datas_by_cycle)
-            )
-            # Definir el orden deseado para los ciclos
-            orden_ciclos = ["P", "H", "V", "A"]
-
-            # Filtrar Checklist_Requirements por diagnosis_id
-            checklist_requirements = Checklist_Requirement.objects.filter(
-                diagnosis=diagnosis.id,
-                compliance__in=[
-                    ComplianceIds.NO_CUMPLE.value,
-                    ComplianceIds.NO_APLICA.value,
-                ],
-            ).select_related("requirement")
-
-            requirement_ids = checklist_requirements.values_list(
-                "requirement_id", flat=True
-            )
-
-            observaciones_por_requirement = {
-                checklist.requirement_id: f"PASO {checklist.requirement.step}: {checklist.observation}"
-                for checklist in checklist_requirements
-                if checklist.compliance.id == ComplianceIds.NO_APLICA.value
-            }
-            # Construir la condición para las recomendaciones basadas en el tipo de diagnóstico
-            if diagnosis.type.id == 1:  # Supongamos que 1 es 'basic'
-                filtro_tipo = Q(basic=True)
-            elif diagnosis.type.id == 2:  # Supongamos que 2 es 'standard'
-                filtro_tipo = Q(standard=True)
-            elif diagnosis.type.id == 3:  # Supongamos que 3 es 'advanced'
-                filtro_tipo = Q(advanced=True)
-            else:
-                filtro_tipo = Q()  # Manejo de error o tipo desconocido
-
-            # Obtener observaciones y recomendaciones asociadas a los requirements de esos Checklist_Requirements
-            recomendaciones = Recomendation.objects.filter(
-                (filtro_tipo | Q(all=True)) & Q(requirement_id__in=requirement_ids)
-            ).select_related("requirement")
-
-            # Crear un diccionario para almacenar las recomendaciones agrupadas por cycle
-            resultados_por_cycle = defaultdict(list)
-            for recomendacion in recomendaciones:
-                if recomendacion.name != None:
-                    cycle = recomendacion.requirement.cycle
-                    nombre_recomendacion = (
-                        f"PASO {recomendacion.requirement.step} - {recomendacion.name}"
-                    )
-
-                    # Crear una clave única para evitar duplicados
-                    observation = observaciones_por_requirement.get(
-                        recomendacion.requirement_id, ""
-                    )
-
-                    resultados_por_cycle[cycle].append(
-                        {
-                            "recomendacion": nombre_recomendacion,
-                            "observation": observation,
-                        }
-                    )
-
-            # Convertir los resultados agrupados en una lista final
-            resultado_final = [
-                {"cycle": cycle, "recomendations": recomendacion}
-                for cycle, recomendacion in resultados_por_cycle.items()
-            ]
-            variables_to_change["{{PERCENTAGE_TOTAL}}"] = str(
-                data_completion_percentage
-            )
-            insert_table_recomendations(doc, "{{RECOMENDATIONS}}", resultado_final)
-
-            replace_placeholders_in_document(doc, variables_to_change)
-
-            buffer = BytesIO()
-            doc.save(buffer)
-            buffer.seek(0)
-            word_file_content = buffer.getvalue()
-            if format_to_save == "pdf":
-                pdf_file_content = convert_docx_to_pdf_base64(word_file_content)
-                encoded_file = pdf_file_content
-            else:  # Default to Word
-                file_content = word_file_content
-                encoded_file = base64.b64encode(file_content).decode("utf-8")
+            encoded_file, file_content = generate_report.generate_report(format_to_save)
 
             return Response({"file": encoded_file}, status=status.HTTP_200_OK)
         except Exception as ex:
@@ -1678,6 +1274,78 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             # Manejar el caso en que la empresa no se encuentra
             return Response(
                 {"error": "El diagnostico no existe."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=[HTTPMethod.POST])
+    def send_report(self, request: Request):
+        get_use_case = GetUseCases(self.diagnosis_repository)
+        email_to = request.data.get("email_to")
+        diagnosis_id = int(request.data.get("diagnosis"))
+        company_id = request.data.get("company")
+        schedule = request.query_params.get("schedule")
+        sequence = request.query_params.get("sequence")
+        company = None
+        if int(company_id) > 0:
+            try:
+                company = self.company_service.get_company(company_id)
+            except Company.DoesNotExist:
+                return Response(
+                    {"error": "Empresa no encontrada."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        if not email_to:
+            return Response(
+                {"error": "El id del grupo empresarial es obligatiorio"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if int(diagnosis_id) > 0:
+            diagnosis = get_use_case.get_by_id(diagnosis_id)
+        else:
+            return Response(
+                {"error": "El id del diagnostico es obligatiorio"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        variable_for_email = {"subject": "", "body": ""}
+        if diagnosis.is_for_corporate_group:
+            variable_for_email["subject"] = (
+                f"Informe Diagnostico PESV - {diagnosis.corporate_group.name.upper()}"
+            )
+            variable_for_email["body"] = (
+                f"Buenos dias se adjunta informe de diagnostico Pesv para el grupo empresarial: {diagnosis.corporate_group.name.upper()}, con NIT: {diagnosis.corporate_group.nit}"
+            )
+        else:
+            variable_for_email["subject"] = (
+                f"Informe Diagnostico PESV - {diagnosis.company.name.upper()}"
+            )
+            variable_for_email["body"] = (
+                f"Buenos dias se adjunta informe de diagnostico Pesv para la empresa: {diagnosis.company.name.upper()}, con NIT: {diagnosis.company.nit}"
+            )
+
+        generate_report = GenerateReport(
+            company=company,
+            diagnosis=diagnosis,
+            schedule=schedule,
+            sequence=sequence,
+        )
+        encoded_file, file_content = generate_report.generate_report("pdf")
+
+        email = EmailMessage(
+            subject=variable_for_email["subject"],
+            body=variable_for_email["body"],
+            from_email="soporte@consultoriaycapacitacionhseq.com",
+            to=[email_to],
+        )
+        email.attach("Diagnostico_PESV.pdf", file_content, "application/pdf")
+        try:
+            email.send()
+            return Response(
+                {"message": "Correo enviado con éxito"}, status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 

@@ -1423,7 +1423,7 @@ def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
         os.remove(temp_docx_name)
         os.remove(temp_pdf_name)
 
-    return pdf_base64
+    return pdf_base64, pdf_content
 
 
 def calculate_obtained_value(num_questions):

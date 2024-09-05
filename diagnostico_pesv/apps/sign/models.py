@@ -11,3 +11,4 @@ class User(AbstractUser):
     )
     cedula = models.CharField(max_length=10, blank=True, null=None, unique=True)
     avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)
+    change_password = models.BooleanField(default=False, null=False, blank=False)

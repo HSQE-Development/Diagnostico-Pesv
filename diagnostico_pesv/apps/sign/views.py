@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UserSerializer, UserDetailSerializer
+from .serializers import UserSerializer, UserDetailSerializer, GroupSerializer
 from .models import User
 from utils.tokenManagement import (
     get_tokens_for_user,
@@ -16,6 +16,47 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from apps.sign.permissions import IsSuperAdmin, IsConsultor, IsAdmin, GroupTypes
 from django.contrib.auth.models import Group
+import random
+import string
+from django.core.mail import send_mail
+from django.conf import settings
+from .services import (
+    send_temporary_password_email,
+    generate_username,
+    get_existing_usernames,
+)
+import traceback
+from django.db import transaction
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])  #
+def findAll(request):
+    try:
+        users = User.objects.all()
+        serializer = UserDetailSerializer(users, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findById(request: Request, id):
+    """
+    Consulta segun el id proporcionado en la url
+    """
+    try:
+        user = User.objects.get(pk=id)
+        serializer = UserDetailSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(["POST"])
@@ -49,41 +90,96 @@ def login(request):
 
 @api_view(["POST"])
 @authentication_classes([JWTAuthentication])
+def logout(request):
+    try:
+        refresh_token = request.data.get("refresh")
+        if refresh_token is None:
+            return Response(
+                {"error": "Refresh token es requerido"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+
+        return Response(status=status.HTTP_205_RESET_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def register(request):
     try:
         if IsAdmin().has_permission(request.user) or IsSuperAdmin().has_permission(
             request.user
         ):
-            password = request.data.get("password")
-            serializer = UserSerializer(data=request.data)
+            cedula = request.data.get("cedula")
+            first_name = request.data.get("first_name")
+            last_name = request.data.get("last_name")
             groups = request.data.get("groups", [])
-            if serializer.is_valid():
-                serializer.save()
-                user = User.objects.get(username=serializer.data["username"])
-                user.set_password(password)
-                user.groups.set(groups)
-                user.save()
-                # Genera tokens para el usuario registrado
-                refresh = RefreshToken.for_user(user)
-                tokens = {
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
-                }
+
+            # Verifica si la cédula ya está registrada
+            if User.objects.filter(cedula=cedula).exists():
                 return Response(
-                    {"tokens": tokens, "user": serializer.data},
-                    status=status.HTTP_201_CREATED,
+                    {"error": "La cédula ya está registrada"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            # Asignar un nombre de usuario vacío por defecto
+            username = request.data.get("username", None)
+            if not username:
+                request.data["username"] = first_name
+
+            serializer = UserSerializer(data=request.data)
+            if serializer.is_valid():
+                with transaction.atomic():
+                    temp_password = "".join(
+                        random.choices(string.ascii_letters + string.digits, k=8)
+                    )
+                    user = serializer.save()
+                    user.set_password(temp_password)
+                    user.groups.set(groups)
+
+                    # Generar nombre de usuario único si no se proporcionó
+                    if not username:
+                        existing_usernames = get_existing_usernames()
+                        username = generate_username(
+                            first_name,
+                            last_name,
+                            unique=True,
+                            existing_usernames=existing_usernames,
+                        )
+                        user.username = username
+
+                    user.save()
+
+                    # Enviar correo con la contraseña temporal
+                    send_temporary_password_email(user, temp_password)
+
+                    # Genera tokens para el usuario registrado
+                    refresh = RefreshToken.for_user(user)
+                    tokens = {
+                        "refresh": str(refresh),
+                        "access": str(refresh.access_token),
+                    }
+
+                    return Response(
+                        {"tokens": tokens, "user": UserSerializer(user).data},
+                        status=status.HTTP_201_CREATED,
+                    )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        else:
-            return Response(
-                {"error": "No tienes los privilegios para esta operacion"},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-    except Exception as ex:
         return Response(
-            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": "No tienes los privilegios para esta operación"},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+    except Exception as ex:
+        tb_str = traceback.format_exc()
+        return Response(
+            {"error": str(ex), "traceback": tb_str},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
@@ -107,10 +203,12 @@ def profile(request):
 def find_by_id(request: Request):
     try:
         user_id = request.query_params.get("user")
+        if user_id:
+            user = User.objects.get(pk=user_id)
+            serializer = UserDetailSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({}, status=status.HTTP_200_OK)
 
-        user = User.objects.get(pk=user_id)
-        serializer = UserDetailSerializer(user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
         return Response(
             {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -138,6 +236,20 @@ def findAllConsultants(request):
         consultor_group = Group.objects.get(name=GroupTypes.CONSULTOR.value)
         users = User.objects.filter(groups=consultor_group)
         serializer = UserDetailSerializer(users, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findAllGroups(request):
+    try:
+        groups = Group.objects.all()
+        serializer = GroupSerializer(groups, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
         return Response(

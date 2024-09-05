@@ -11,15 +11,15 @@ class GroupTypes(Enum):
 
 
 class IsSuperAdmin(BasePermission):
-    def has_permission(user: User):
+    def has_permission(self, user: User):
         return user and user.groups.filter(name=GroupTypes.SUPER_ADMIN.value).exists()
 
 
 class IsAdmin(BasePermission):
-    def has_permission(user: User):
+    def has_permission(self, user: User):
         return user and user.groups.filter(name=GroupTypes.ADMIN.value).exists()
 
 
 class IsConsultor(BasePermission):
-    def has_permission(user: User):
+    def has_permission(self, user: User):
         return user and user.groups.filter(name=GroupTypes.CONSULTOR.value).exists()
