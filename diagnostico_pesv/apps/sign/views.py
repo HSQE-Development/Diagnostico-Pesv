@@ -116,11 +116,17 @@ def register(request):
             request.user
         ):
             cedula = request.data.get("cedula")
+            email = request.data.get("email")
             first_name = request.data.get("first_name")
             last_name = request.data.get("last_name")
             groups = request.data.get("groups", [])
 
             # Verifica si la cédula ya está registrada
+            if User.objects.filter(email=email).exists():
+                return Response(
+                    {"error": "El correo ya está registrado"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if User.objects.filter(cedula=cedula).exists():
                 return Response(
                     {"error": "La cédula ya está registrada"},
@@ -226,6 +232,25 @@ def update(request: Request):
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["PATCH"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def change_password(request: Request):
+    try:
+        user_id = request.data.get("user")
+        password = request.data.get("password")
+        user = User.objects.get(pk=user_id)
+        user.set_password(password)
+        user.change_password = True
+        user.save()
+        serializer = UserDetailSerializer(user)
+        return Response(serializer.data)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(["GET"])

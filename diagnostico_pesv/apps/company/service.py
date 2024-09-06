@@ -8,6 +8,9 @@ class CompanyService:
     class NitAlreadyExists(Exception):
         pass
 
+    class NametAlreadyExists(Exception):
+        pass
+
     class ConsultorNotFound(Exception):
         pass
 
@@ -15,6 +18,13 @@ class CompanyService:
     def validate_nit(nit):
         if Company.objects.filter(nit=nit).exists():
             raise CompanyService.NitAlreadyExists("La empresa con este NIT ya existe.")
+
+    @staticmethod
+    def validate_name(name):
+        if Company.objects.filter(name=name).exists():
+            raise CompanyService.NametAlreadyExists(
+                "La empresa con este nombre ya existe."
+            )
 
     @staticmethod
     def validate_consultor(consultor_id):

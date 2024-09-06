@@ -54,6 +54,7 @@ class Diagnosis(SoftDeletes, Timestampable):
     date_elabored = models.DateField(null=False, blank=False)
     is_finalized = models.BooleanField(default=False, null=False)
     in_progress = models.BooleanField(default=False, null=True)
+    external_count_complete = models.BooleanField(default=False, null=True)
     schedule = models.CharField(null=True, blank=False, max_length=100)
     sequence = models.CharField(null=True, blank=False, max_length=100)
     diagnosis_step = models.IntegerField(null=False, default=0)

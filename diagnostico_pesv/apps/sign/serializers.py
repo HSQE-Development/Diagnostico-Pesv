@@ -33,6 +33,7 @@ class UserSerializer(serializers.ModelSerializer):
             "groups",  # Agrega el campo groups
             "groups_detail",
             "change_password",
+            "external_step",
         ]
         extra_kwargs = {
             "password": {"write_only": True, "required": False},
@@ -66,4 +67,5 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "groups",
             "groups_detail",
             "change_password",
+            "external_step",
         ]

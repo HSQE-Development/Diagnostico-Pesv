@@ -91,3 +91,11 @@ def eliminar_tildes(texto):
     nfkd_form = unicodedata.normalize("NFD", texto)
     # Filtrar los caracteres que no sean marcas diacríticas (Mn)
     return "".join([c for c in nfkd_form if not unicodedata.category(c) == "Mn"])
+
+
+def validate_max_length(s: str, max_length: int) -> bool:
+    return len(s) <= max_length
+
+
+def validate_min_length(s: str, min_length: int) -> bool:
+    return len(s) >= min_length

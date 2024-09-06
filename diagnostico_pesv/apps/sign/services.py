@@ -9,7 +9,7 @@ from .models import User
 
 def send_temporary_password_email(user, temp_password):
     send_mail(
-        "Tu contraseña temporal",
+        "Contraseña temporal",
         f"Hola {user.first_name} {user.last_name}, tu contraseña temporal es: {temp_password}",
         settings.DEFAULT_FROM_EMAIL,
         [user.email],

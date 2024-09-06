@@ -117,6 +117,7 @@ class DiagnosisSerializer(serializers.ModelSerializer):
             "sequence",
             "observation",
             "in_progress",
+            "external_count_complete",
             "is_for_corporate_group",
             "corporate_group",
         ]

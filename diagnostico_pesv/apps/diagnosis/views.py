@@ -614,22 +614,26 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=[HTTPMethod.POST])
     def saveAnswerCuestions(self, request: Request):
+        user = request.user
         consultor_id = request.data.get("consultor")
+        external_count_complete = request.data.get("external_count_complete")
         company_id = request.data.get("company")
         vehicle_data = request.data.get("vehicleData", [])
         driver_data = request.data.get("driverData", [])
         diagnosis_data = {
             "company": company_id,
             "date_elabored": None,
-            "consultor": consultor_id,
+            "consultor": consultor_id if consultor_id > 0 else None,
         }
         diagnosis_serializer = DiagnosisSerializer(data=diagnosis_data)
-
+        consultor = None
         if diagnosis_serializer.is_valid():
             try:
                 with transaction.atomic():
                     company = self.company_service.get_company(company_id)
-                    consultor = User.objects.get(id=consultor_id)
+                    if consultor_id > 0:
+                        consultor = User.objects.get(id=consultor_id)
+
                     get_use_case = GetUseCases(self.diagnosis_repository)
                     # existing_diagnosis = get_use_case.get_diagnosis_by_date_elabored(today)
                     existing_diagnosis = (
@@ -672,6 +676,11 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     diagnosis.type = size_and_type
                     diagnosis.diagnosis_step = 1
                     diagnosis.in_progress = True
+                    if external_count_complete:
+                        userInstance = User.objects.get(id=user.id)
+                        userInstance.external_step = 2
+                        userInstance.save()
+                        diagnosis.external_count_complete = True
                     diagnosis.save()
 
                     diagnosis_requirement_use_case = DiagnosisRequirementUseCases(

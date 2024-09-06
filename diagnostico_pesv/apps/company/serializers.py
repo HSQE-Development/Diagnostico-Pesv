@@ -120,6 +120,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "segment_detail",
             "dependant",
             "dependant_phone",
+            "dependant_position",
             "email",
             "acquired_certification",
             "mission",

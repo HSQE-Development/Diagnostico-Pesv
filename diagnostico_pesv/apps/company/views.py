@@ -35,6 +35,9 @@ from rest_framework.exceptions import ValidationError
 from http import HTTPMethod
 from .service import CompanyService
 from django.db import transaction
+from apps.sign.models import User
+from utils.functionUtils import validate_max_length, validate_min_length
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,40 +53,53 @@ class CompanyViewSet(viewsets.ModelViewSet):
         arlId = self.request.query_params.get("arlId")
         if arlId is not None:
             return Company.objects.filter(arl=arlId)
-        if IsSuperAdmin.has_permission(
+        if IsSuperAdmin().has_permission(
             user=self.request.user
-        ) or IsAdmin.has_permission(user=self.request.user):
+        ) or IsAdmin().has_permission(user=self.request.user):
             return Company.objects_with_deleted
         return Company.objects.all()
 
     def create(self, request: Request, *args, **kwargs):
         try:
+            user = request.user
             # Prepare data for validation and perform validation
-            transformed_data = self.prepare_data(request.data)
+            data = request.data.copy()
+            external_user = data.get("external_user")
+            data.pop("external_user", None)
+            with transaction.atomic():
+                transformed_data = self.prepare_data(data)
 
-            # Deserialize and validate the data
-            serializer = self.get_serializer(data=transformed_data)
-            serializer.is_valid(raise_exception=True)
+                # Deserialize and validate the data
+                serializer = self.get_serializer(data=transformed_data)
 
-            # Validate using external service methods
-            CompanyService.validate_nit(transformed_data.get("nit"))
+                CompanyService.validate_nit(transformed_data.get("nit"))
+                CompanyService.validate_name(transformed_data.get("name"))
 
-            # Save the new Company instance
-            self.perform_create(serializer)
+                serializer.is_valid(raise_exception=True)
 
-            # Get the created Company instance
-            company_instance = serializer.instance
+                # Validate using external service methods
 
-            # Handle the many-to-many relationships
-            ciuus_codes = transformed_data.get("ciius", [])
-            ciuus_ids = [int(identifier) for identifier in ciuus_codes]
+                # Save the new Company instance
+                self.perform_create(serializer)
 
-            # Find or create CIIU instances based on the provided codes
-            ciius = Ciiu.objects.filter(pk__in=ciuus_ids)
+                # Get the created Company instance
+                company_instance = serializer.instance
 
-            # Set the many-to-many relationship
-            company_instance.ciius.set(ciius)
-            headers = self.get_success_headers(serializer.data)
+                # Handle the many-to-many relationships
+                ciuus_codes = transformed_data.get("ciius", [])
+                ciuus_ids = [int(identifier) for identifier in ciuus_codes]
+
+                # Find or create CIIU instances based on the provided codes
+                ciius = Ciiu.objects.filter(pk__in=ciuus_ids)
+
+                # Set the many-to-many relationship
+                company_instance.ciius.set(ciius)
+                headers = self.get_success_headers(serializer.data)
+
+                if external_user:
+                    userInstance = User.objects.get(pk=user.id)
+                    userInstance.external_step = 1
+                    userInstance.save()
 
             return Response(
                 serializer.data, status=status.HTTP_201_CREATED, headers=headers
@@ -308,6 +324,39 @@ class CompanyViewSet(viewsets.ModelViewSet):
         ]
 
         return Response(diagnostics_data)
+
+    @action(detail=False)
+    def find_company_by_nit(self, request: Request):
+        nit = request.query_params.get("nit")
+        if not nit or nit == 0:
+            return Response(
+                {"error": "El nit es obligatorio"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not validate_max_length(nit, 10):
+            return Response(
+                {"error": "El nit debe de ser de maximo 10 caracteres"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not validate_min_length(nit, 10):
+            return Response(
+                {"error": "El nit debe de ser de minimo 10 caracteres"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            try:
+                # Intenta obtener la empresa por el NIT
+                company = Company.objects.get(nit=nit)
+                serializer = CompanySerializer(company)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except Company.DoesNotExist:
+                # Si no encuentra la empresa, envía una respuesta vacía
+                return Response({}, status=status.HTTP_200_OK)
+        except Exception as ex:
+            return Response(
+                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # @api_view(["POST"])
