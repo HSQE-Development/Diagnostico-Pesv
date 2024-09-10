@@ -35,6 +35,7 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "django_celery_results",
     "corsheaders",
+    "channels",
     "timestamps",
     "django_seed",
     "apps.sign",
@@ -86,6 +88,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "diagnostico_pesv.wsgi.application"
+ASGI_APPLICATION = "diagnostico_pesv.asgi.application"
 
 
 # Database
@@ -228,3 +231,9 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_RESULT_BACKEND = "django-db"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}

@@ -57,3 +57,4 @@ class Company(SoftDeletes, Timestampable):
         CompanySize, on_delete=models.SET_NULL, null=True, blank=False
     )  # Añadido
     ciius = models.ManyToManyField(Ciiu, related_name="companies")
+    enable_for_counting = models.BooleanField(default=True)

@@ -99,3 +99,14 @@ class Checklist_Requirement(SoftDeletes, Timestampable):
         Compliance, on_delete=models.SET_NULL, null=True, blank=False
     )
     observation = models.TextField(blank=False, null=True)
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, default=None)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    read = models.BooleanField(default=False)
+    diagnosis = models.ForeignKey(Diagnosis, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"Notification to {self.user} - {self.message}"

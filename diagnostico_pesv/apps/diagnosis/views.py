@@ -27,10 +27,12 @@ from .models import (
     CheckList,
     Diagnosis,
     Checklist_Requirement,
+    Notification,
 )
 from .serializers import (
     Diagnosis_QuestionsSerializer,
     DiagnosisSerializer,
+    NotificationSerializer,
 )
 from apps.diagnosis_counter.serializers import FleetSerializer, DriverSerializer
 from apps.company.models import Company, CompanySize
@@ -56,11 +58,13 @@ from apps.diagnosis_requirement.infraestructure.repositories import (
     DiagnosisRequirementRepository,
 )
 from django.db.models import Prefetch, OuterRef, Subquery, Q, Sum, Count
-from apps.sign.models import User
+from apps.sign.models import User, QueryLog
 from utils.constants import ComplianceIds
 from collections import OrderedDict
 from apps.corporate_group.repositories import CorporateGroupRepository
 from django.core.mail import EmailMessage
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 
 def remove_invalid_requirements(diagnosis_id, valid_requirements):
@@ -615,6 +619,8 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=[HTTPMethod.POST])
     def saveAnswerCuestions(self, request: Request):
         user = request.user
+        ip_address = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
         consultor_id = request.data.get("consultor")
         external_count_complete = request.data.get("external_count_complete")
         company_id = request.data.get("company")
@@ -707,6 +713,38 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                             vehicle_errors, driver_errors
                         )
 
+                    channel_layer = get_channel_layer()
+                    notification = Notification.objects.create(
+                        user=None,
+                        message=f"Se ha Completado el conteo de la flota vehicular.",
+                        created_at=datetime.now(),
+                        diagnosis=diagnosis,
+                    )
+                    async_to_sync(channel_layer.group_send)(
+                        "diagnosis",  # Nombre del grupo al que enviar el mensaje
+                        {
+                            "type": "external_notification",  # Tipo de mensaje
+                            "notification_data": NotificationSerializer(
+                                notification
+                            ).data,
+                        },
+                    )
+                    async_to_sync(channel_layer.group_send)(
+                        "diagnosis",  # Nombre del grupo al que enviar el mensaje
+                        {
+                            "type": "external_count",  # Tipo de mensaje
+                            "diagnosis_data": DiagnosisSerializer(diagnosis).data,
+                        },
+                    )
+
+                    QueryLog.objects.create(
+                        user=request.user if request.user.is_authenticated else None,
+                        ip_address=ip_address,
+                        action="saveAnswerCuestions",
+                        http_method=request.method,
+                        query_params=dict(request.query_params),
+                        user_agent=user_agent,
+                    )
                     return self.diagnosis_service.build_success_response(
                         vehicle_data, driver_data, diagnosis
                     )
@@ -716,6 +754,14 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
                     {"error": "Company not found."}, status=status.HTTP_404_NOT_FOUND
                 )
             except Exception as ex:
+                QueryLog.objects.create(
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=ip_address,
+                    action=f"saveAnswerCuestions -error:  {str(ex)}",
+                    http_method=request.method,
+                    query_params=dict(request.query_params),
+                    user_agent=user_agent,
+                )
                 tb_str = traceback.format_exc()
                 return Response(
                     {"error": str(ex), "traceback": tb_str},
@@ -1355,6 +1401,44 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False)
+    def find_notifications_by_user(self, request: Request):
+        user_id = request.query_params.get("user")
+        user = None
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Usuario no existe o esta inactivo"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            notifications = Notification.objects.filter(
+                Q(user=user) | Q(user__isnull=True)
+            ).order_by("-created_at")
+            serializer = NotificationSerializer(notifications, many=True)
+            return Response(serializer.data)
+        except Exception as ex:
+            return Response(
+                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=[HTTPMethod.PATCH])
+    def read_notifications(self, request: Request):
+        try:
+            notifications_ids = request.data.get("notifications", [])
+            notifications = Notification.objects.filter(id__in=notifications_ids)
+            for notify in notifications:
+                notify.read = True
+
+            Notification.objects.bulk_update(notifications, ["read"])
+            return Response({"message": True})
+        except Exception as ex:
+            return Response(
+                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 

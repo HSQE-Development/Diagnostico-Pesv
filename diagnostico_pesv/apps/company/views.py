@@ -35,7 +35,7 @@ from rest_framework.exceptions import ValidationError
 from http import HTTPMethod
 from .service import CompanyService
 from django.db import transaction
-from apps.sign.models import User
+from apps.sign.models import User, QueryLog
 from utils.functionUtils import validate_max_length, validate_min_length
 
 
@@ -325,9 +325,12 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
         return Response(diagnostics_data)
 
-    @action(detail=False)
+    @action(detail=False, methods=["GET"])
     def find_company_by_nit(self, request: Request):
         nit = request.query_params.get("nit")
+        ip_address = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
+
         if not nit or nit == 0:
             return Response(
                 {"error": "El nit es obligatorio"},
@@ -349,11 +352,36 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 # Intenta obtener la empresa por el NIT
                 company = Company.objects.get(nit=nit)
                 serializer = CompanySerializer(company)
+                QueryLog.objects.create(
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=ip_address,
+                    action="find_company_by_nit",
+                    http_method=request.method,
+                    query_params=dict(request.query_params),
+                    user_agent=user_agent,
+                )
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except Company.DoesNotExist:
                 # Si no encuentra la empresa, envía una respuesta vacía
+                QueryLog.objects.create(
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=ip_address,
+                    action="find_company_by_nit - company not found",
+                    http_method=request.method,
+                    query_params=dict(request.query_params),
+                    user_agent=user_agent,
+                )
                 return Response({}, status=status.HTTP_200_OK)
         except Exception as ex:
+            # Registra la excepción en QueryLog
+            QueryLog.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                ip_address=ip_address,
+                action=f"find_company_by_nit - error: {str(ex)}",
+                http_method=request.method,
+                query_params=dict(request.query_params),
+                user_agent=user_agent,
+            )
             return Response(
                 {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

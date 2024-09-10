@@ -13,3 +13,15 @@ class User(AbstractUser):
     avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)
     change_password = models.BooleanField(default=False, null=False, blank=False)
     external_step = models.IntegerField(default=0)
+
+
+class QueryLog(SoftDeletes, Timestampable):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    ip_address = models.GenericIPAddressField()
+    action = models.CharField(max_length=255)
+    query_params = models.JSONField(null=True, default=None)
+    http_method = models.CharField(max_length=10, null=True, default=None)
+    user_agent = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"QueryLog by {self.user}"

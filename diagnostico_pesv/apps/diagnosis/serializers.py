@@ -7,6 +7,7 @@ from apps.diagnosis_requirement.infraestructure.serializers import (
     Diagnosis_RequirementSerializer,
 )
 from apps.sign.serializers import UserDetailSerializer
+from apps.company.serializers import CompanySerializer
 
 
 class VehicleQuestionSerializer(serializers.ModelSerializer):
@@ -94,7 +95,7 @@ class DiagnosisSerializer(serializers.ModelSerializer):
     # company = serializers.PrimaryKeyRelatedField(
     #     queryset=Company.objects.all(), write_only=True
     # )
-    # company_detail = CompanySerializer(source="company", read_only=True)
+    company_detail = CompanySerializer(source="company", read_only=True)
     consultor = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), write_only=True, required=False, allow_null=True
     )
@@ -120,6 +121,7 @@ class DiagnosisSerializer(serializers.ModelSerializer):
             "external_count_complete",
             "is_for_corporate_group",
             "corporate_group",
+            "company_detail",
         ]
         extra_kwargs = {
             "date_elabored": {"allow_null": True, "required": False},
@@ -180,3 +182,27 @@ class ComplianceCountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Compliance
         fields = ["id", "name", "count"]
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), write_only=True
+    )
+    user_detail = UserDetailSerializer(source="user", read_only=True)
+    diagnosis = serializers.PrimaryKeyRelatedField(
+        queryset=Diagnosis.objects.all(), write_only=True
+    )
+    diagnosis_detail = DiagnosisSerializer(source="diagnosis", read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "user",
+            "user_detail",
+            "diagnosis",
+            "diagnosis_detail",
+            "message",
+            "created_at",
+            "read",
+        ]
