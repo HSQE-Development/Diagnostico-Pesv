@@ -17,7 +17,7 @@ services:
     depends_on:
       - db
     env_file:
-      - ../.env
+      - ./.env
 
   db:
     image: mysql_8_4_2 
