@@ -4,7 +4,7 @@ services:
     build:
       context: ./diagnostico_pesv
       dockerfile: Dockerfile
-    command: sh -c "/usr/local/bin/wait-for-it.sh db:3306 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "/usr/local/bin/wait-for-it.sh 127.0.0.1:33080 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
     restart: always
     container_name: pesvapp
     volumes:
