@@ -6,30 +6,10 @@ services:
       dockerfile: Dockerfile
     command: sh -c "/usr/local/bin/wait-for-it.sh db:3306 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
     restart: always
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
     container_name: pesvapp
     volumes:
       - .:/app
     ports:
-      - "8000:8000"  # El puerto del contenedor Django expuesto en tu máquina local
-    depends_on:
-      - db
+      - "8000:8000"
     env_file:
       - ./.env
-
-  db:
-    image: mysql_8_4_2 
-    environment:
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "33080:3306"  # Mapea el puerto 33080 de tu máquina al puerto 3306 del contenedor
-    volumes:
-      - db_data:/var/lib/mysql
-
-volumes:
-  db_data:  # Definición del volumen para la base de datos
