@@ -1,8 +1,8 @@
 FROM python:3.10
 
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 
 # Establece el directorio de trabajo en el contenedor
@@ -19,7 +19,8 @@ RUN apt-get update && \
 
 RUN python -m venv venv
 # Instala las dependencias de Python
-RUN pip install --upgrade pip && ./venv/bin/pip install --no-cache-dir -r requirements.txt 
+RUN ./venv/bin/pip install --upgrade pip && \
+    ./venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Copia el código fuente del proyecto al contenedor
 COPY . .
@@ -28,4 +29,4 @@ COPY . .
 EXPOSE 8000
 
 # Comando para ejecutar el servidor de desarrollo de Django
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "diagnostico_pesv.wsgi:application"]
+CMD ["./venv/bin/gunicorn", "--bind", "0.0.0.0:8000", "diagnostico_pesv.wsgi:application"]
