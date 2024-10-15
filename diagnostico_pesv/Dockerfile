@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.12
 
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -19,8 +19,8 @@ RUN apt-get update && \
 
 RUN python -m venv venv
 # Instala las dependencias de Python
-RUN ./venv/bin/pip install --upgrade pip && \
-    ./venv/bin/pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copia el código fuente del proyecto al contenedor
 COPY . .
@@ -29,4 +29,4 @@ COPY . .
 EXPOSE 8000
 
 # Comando para ejecutar el servidor de desarrollo de Django
-CMD ["./venv/bin/gunicorn", "--bind", "0.0.0.0:8000", "diagnostico_pesv.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "diagnostico_pesv.wsgi:application"]
