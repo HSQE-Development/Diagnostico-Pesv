@@ -1,18 +1,5 @@
 services:
-  db:
-    image: mysql:8.4.0
-    restart: always
-    environment:
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "3307:3306"  # Host|Container
-    volumes:
-      - db_data:/var/lib/mysql
-
-  backend:
+  diagnosis_backend:
     build:
       context: .
       dockerfile: Dockerfile
@@ -20,7 +7,7 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     container_name: pesvapp
-    command: sh -c "/usr/local/bin/wait-for-it.sh db:3306 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "/usr/local/bin/wait-for-it.sh localhost:33080 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
     restart: always
     volumes:
       - .:/app
@@ -28,8 +15,4 @@ services:
       - "8000:8000"  # El puerto del contenedor Django expuesto en tu máquina local
     env_file:
       - ../.env
-    depends_on:
-      - db
 
-volumes:
-  db_data:
