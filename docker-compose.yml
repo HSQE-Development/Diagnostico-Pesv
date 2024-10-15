@@ -29,7 +29,7 @@ services:
     ports:
       - "33080:3306"  # Mapea el puerto 33080 de tu máquina al puerto 3306 del contenedor
     volumes:
-      -db_data:/var/lib/mysql
+      - db_data:/var/lib/mysql
 
 volumes:
   db_data:  # Definición del volumen para la base de datos
