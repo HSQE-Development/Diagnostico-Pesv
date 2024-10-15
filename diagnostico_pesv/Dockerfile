@@ -18,7 +18,7 @@ RUN apt-get update && \
     chmod +x /usr/local/bin/wait-for-it.sh
 
 # Instala las dependencias de Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt 
 
 # Copia el código fuente del proyecto al contenedor
 COPY . .
