@@ -235,5 +235,5 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
-CORS_ALLOWED_ORIGINS = ["https://pesvapp.consultoriaycapacitacionhseq.com"]
-ALLOWED_HOSTS = ["https://pesvapp.consultoriaycapacitacionhseq.com"]
+CORS_ALLOWED_ORIGINS = ["pesvapp.consultoriaycapacitacionhseq.com"]
+ALLOWED_HOSTS = ["pesvapp.consultoriaycapacitacionhseq.com"]
