@@ -29,33 +29,6 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG") == "True"
 
-CORS_ALLOWED_ORIGINS = [
-    "https://pesvapp.consultoriaycapacitacionhseq.com",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
-
-CORS_ALLOW_CREDENTIALS = True  # Permitir credenciales
-CORS_ALLOW_METHODS = [
-    "GET",
-    "POST",
-    "PUT",
-    "PATCH",
-    "DELETE",
-    "OPTIONS",
-]
-
-CORS_EXPOSE_HEADERS = [
-    "Authorization",
-    "Content-Type",
-]
-
-CORS_ALLOW_HEADERS = [
-    "Authorization",
-    "Content-Type",
-    "X-Requested-With",
-    "Accept",
-]
 # Application definition
 
 INSTALLED_APPS = [
@@ -94,6 +67,35 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "diagnostico_pesv.urls"
+
+
+CORS_ALLOWED_ORIGINS = [
+    "https://pesvapp.consultoriaycapacitacionhseq.com",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+CORS_ALLOW_CREDENTIALS = True  # Permitir credenciales
+CORS_ALLOW_METHODS = [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+]
+
+CORS_EXPOSE_HEADERS = [
+    "Authorization",
+    "Content-Type",
+]
+
+CORS_ALLOW_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "X-Requested-With",
+    "Accept",
+]
 
 TEMPLATES = [
     {
