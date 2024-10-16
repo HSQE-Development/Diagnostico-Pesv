@@ -28,6 +28,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG") == "True"
+ALLOWED_HOSTS = ["consultoriaycapacitacionhseq.com"]
 
 # Application definition
 
@@ -68,8 +69,6 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
-
-CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_CREDENTIALS = True  # Permitir credenciales
 CORS_ALLOW_METHODS = [
