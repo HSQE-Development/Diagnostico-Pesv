@@ -29,8 +29,6 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG") == "True"
 
-ALLOWED_HOSTS = ["https://pesvapp.consultoriaycapacitacionhseq.com/"]
-
 
 # Application definition
 
@@ -237,4 +235,5 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
-CORS_ALLOWED_ORIGINS = ["https://pesvapp.consultoriaycapacitacionhseq.com/"]
+CORS_ALLOWED_ORIGINS = ["https://pesvapp.consultoriaycapacitacionhseq.com"]
+ALLOWED_HOSTS = ["https://pesvapp.consultoriaycapacitacionhseq.com"]
