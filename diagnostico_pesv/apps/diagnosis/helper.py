@@ -14,6 +14,9 @@ import os
 import base64
 from tempfile import NamedTemporaryFile
 from docx2pdf import convert
+import tempfile
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 
 def apply_bullets(paragraph):
@@ -1403,26 +1406,38 @@ def create_bar_chart(datas_by_cycle):
     return image_file
 
 
-def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
+def convert_docx_to_pdf_base64(word_file_content):
+    import subprocess
+    # Guardar el archivo DOCX en el sistema de archivos temporalmente
+    with open("temp_doc.docx", "wb") as temp_doc:
+        temp_doc.write(word_file_content)
 
-    with NamedTemporaryFile(suffix=".docx", delete=False) as temp_docx_file:
-        temp_docx_file.write(docx_bytes)
-        temp_docx_name = temp_docx_file.name
+    # Convertir el DOCX a PDF usando LibreOffice
+    subprocess.run(
+        [
+            "libreoffice",
+            "--headless",
+            "--convert-to",
+            "pdf",
+            "temp_doc.docx",
+            "--outdir",
+            ".",
+        ],
+        check=True,
+    )
 
-    with NamedTemporaryFile(suffix=".pdf", delete=False) as temp_pdf_file:
-        temp_pdf_name = temp_pdf_file.name
+    # Leer el PDF generado
+    with open("temp_doc.pdf", "rb") as pdf_file:
+        pdf_content = pdf_file.read()
 
-    try:
-        convert(temp_docx_name, temp_pdf_name)
+    # Eliminar los archivos temporales
+    os.remove("temp_doc.docx")
+    os.remove("temp_doc.pdf")
 
-        with open(temp_pdf_name, "rb") as pdf_file:
-            pdf_content = pdf_file.read()
-            pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
-    finally:
-        # Ensure the files are cleaned up even if an error occurs
-        os.remove(temp_docx_name)
-        os.remove(temp_pdf_name)
+    # Convertir el archivo PDF a base64
+    pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
 
+    # Devolver el archivo PDF en base64 y en bytes
     return pdf_base64, pdf_content
 
 

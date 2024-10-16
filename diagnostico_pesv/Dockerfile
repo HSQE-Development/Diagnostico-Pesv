@@ -14,6 +14,7 @@ COPY requirements.txt .
 # Actualiza la lista de paquetes y arregla problemas de red, instala wget y descarga wait-for-it.sh
 RUN apt-get update && \
     apt-get install -y wget && \
+    apt-get install -y libreoffice && \
     wget https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -O /usr/local/bin/wait-for-it.sh && \
     chmod +x /usr/local/bin/wait-for-it.sh
 
