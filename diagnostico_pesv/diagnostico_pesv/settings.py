@@ -66,7 +66,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
 TEMPLATES = [
@@ -235,5 +234,11 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
-CORS_ALLOWED_ORIGINS = ["consultoriaycapacitacionhseq.com"]
-ALLOWED_HOSTS = ["consultoriaycapacitacionhseq.com"]
+CORS_ALLOWED_ORIGINS = [
+    "https://pesvapp.consultoriaycapacitacionhseq.com",
+]
+ALLOWED_HOSTS = [
+    "apipesv.consultoriaycapacitacionhseq.com",
+    "pesvapp.consultoriaycapacitacionhseq.com",
+    "localhost",
+]
