@@ -70,32 +70,32 @@ MIDDLEWARE = [
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
 
-CORS_ALLOW_CREDENTIALS = True  # Permitir credenciales
-CORS_ALLOW_METHODS = [
-    "GET",
-    "POST",
-    "PUT",
-    "PATCH",
-    "DELETE",
-    "OPTIONS",
-]
+# CORS_ALLOW_CREDENTIALS = True  # Permitir credenciales
+# CORS_ALLOW_METHODS = [
+#     "GET",
+#     "POST",
+#     "PUT",
+#     "PATCH",
+#     "DELETE",
+#     "OPTIONS",
+# ]
 
-CORS_EXPOSE_HEADERS = [
-    "Authorization",
-    "Content-Type",
-]
+# CORS_EXPOSE_HEADERS = [
+#     "Authorization",
+#     "Content-Type",
+# ]
 
-CORS_ALLOW_HEADERS = [
-    "accept",
-    "accept-encoding",
-    "authorization",
-    "content-type",
-    "dnt",
-    "origin",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
-]
+# CORS_ALLOW_HEADERS = [
+#     "accept",
+#     "accept-encoding",
+#     "authorization",
+#     "content-type",
+#     "dnt",
+#     "origin",
+#     "user-agent",
+#     "x-csrftoken",
+#     "x-requested-with",
+# ]
 
 TEMPLATES = [
     {
