@@ -58,9 +58,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -237,6 +237,7 @@ CHANNEL_LAYERS = {
 CORS_ALLOWED_ORIGINS = [
     "https://pesvapp.consultoriaycapacitacionhseq.com",
 ]
+CORS_ALLOW_CREDENTIALS = True
 ALLOWED_HOSTS = [
     "apipesv.consultoriaycapacitacionhseq.com",
     "pesvapp.consultoriaycapacitacionhseq.com",
