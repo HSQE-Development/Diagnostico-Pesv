@@ -11,11 +11,11 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 from pathlib import Path
-from dotenv import load_dotenv
 from datetime import timedelta
 import os
-
+from dotenv import load_dotenv
 load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -29,12 +29,13 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -42,7 +43,10 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "django_celery_results",
     "corsheaders",
+    "channels",
     "timestamps",
     "django_seed",
     "apps.sign",
@@ -50,6 +54,8 @@ INSTALLED_APPS = [
     "apps.diagnosis",
     "apps.diagnosis_requirement",
     "apps.arl",
+    "apps.corporate_group",
+    "apps.diagnosis_counter",
 ]
 
 MIDDLEWARE = [
@@ -82,6 +88,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "diagnostico_pesv.wsgi.application"
+ASGI_APPLICATION = "diagnostico_pesv.asgi.application"
 
 
 # Database
@@ -100,7 +107,6 @@ DATABASES = {
         "OPTIONS": {"init_command": "SET sql_mode='STRICT_TRANS_TABLES'"},
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -130,6 +136,8 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=90),
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
 }
 
 
@@ -206,3 +214,26 @@ LOGGING = {
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = "soporte@consultoriaycapacitacionhseq.com"
+EMAIL_HOST_PASSWORD = "eqnvxgvituwurrah"
+DEFAULT_FROM_EMAIL = "soporte@consultoriaycapacitacionhseq.com"
+
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+CELERY_RESULT_BACKEND = "django-db"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}

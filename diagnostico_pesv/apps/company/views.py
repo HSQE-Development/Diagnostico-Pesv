@@ -11,8 +11,6 @@ from .serializers import (
     CompanySerializer,
     SegmentSerializer,
     MissionSerializer,
-    VehicleQuestionSerializer,
-    DriverQuestionSerializer,
     MisionalitySizeCriteriaSerializer,
     CiiuSerializer,
 )
@@ -21,13 +19,14 @@ from .models import (
     Segments,
     Mission,
     CompanySize,
-    VehicleQuestions,
-    DriverQuestion,
     MisionalitySizeCriteria,
     Ciiu,
 )
-from apps.diagnosis.core.models import Fleet, Driver
-from apps.diagnosis.infraestructure.serializers import DriverSerializer, FleetSerializer
+from apps.diagnosis.models import VehicleQuestions, DriverQuestion
+from apps.diagnosis.serializers import (
+    VehicleQuestionSerializer,
+    DriverQuestionSerializer,
+)
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import get_object_or_404
 from apps.sign.permissions import IsSuperAdmin, IsAdmin
@@ -36,6 +35,9 @@ from rest_framework.exceptions import ValidationError
 from http import HTTPMethod
 from .service import CompanyService
 from django.db import transaction
+from apps.sign.models import User, QueryLog
+from utils.functionUtils import validate_max_length, validate_min_length
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,41 +53,53 @@ class CompanyViewSet(viewsets.ModelViewSet):
         arlId = self.request.query_params.get("arlId")
         if arlId is not None:
             return Company.objects.filter(arl=arlId)
-        if IsSuperAdmin.has_permission(
+        if IsSuperAdmin().has_permission(
             user=self.request.user
-        ) or IsAdmin.has_permission(user=self.request.user):
+        ) or IsAdmin().has_permission(user=self.request.user):
             return Company.objects_with_deleted
         return Company.objects.all()
 
     def create(self, request: Request, *args, **kwargs):
         try:
+            user = request.user
             # Prepare data for validation and perform validation
-            transformed_data = self.prepare_data(request.data)
+            data = request.data.copy()
+            external_user = data.get("external_user")
+            data.pop("external_user", None)
+            with transaction.atomic():
+                transformed_data = self.prepare_data(data)
 
-            # Deserialize and validate the data
-            serializer = self.get_serializer(data=transformed_data)
-            serializer.is_valid(raise_exception=True)
+                # Deserialize and validate the data
+                serializer = self.get_serializer(data=transformed_data)
 
-            # Validate using external service methods
-            CompanyService.validate_nit(transformed_data.get("nit"))
-            CompanyService.validate_consultor(transformed_data.get("consultor"))
+                CompanyService.validate_nit(transformed_data.get("nit"))
+                CompanyService.validate_name(transformed_data.get("name"))
 
-            # Save the new Company instance
-            self.perform_create(serializer)
+                serializer.is_valid(raise_exception=True)
 
-            # Get the created Company instance
-            company_instance = serializer.instance
+                # Validate using external service methods
 
-            # Handle the many-to-many relationships
-            ciuus_codes = transformed_data.get("ciius", [])
-            ciuus_ids = [int(identifier) for identifier in ciuus_codes]
+                # Save the new Company instance
+                self.perform_create(serializer)
 
-            # Find or create CIIU instances based on the provided codes
-            ciius = Ciiu.objects.filter(pk__in=ciuus_ids)
+                # Get the created Company instance
+                company_instance = serializer.instance
 
-            # Set the many-to-many relationship
-            company_instance.ciius.set(ciius)
-            headers = self.get_success_headers(serializer.data)
+                # Handle the many-to-many relationships
+                ciuus_codes = transformed_data.get("ciius", [])
+                ciuus_ids = [int(identifier) for identifier in ciuus_codes]
+
+                # Find or create CIIU instances based on the provided codes
+                ciius = Ciiu.objects.filter(pk__in=ciuus_ids)
+
+                # Set the many-to-many relationship
+                company_instance.ciius.set(ciius)
+                headers = self.get_success_headers(serializer.data)
+
+                if external_user:
+                    userInstance = User.objects.get(pk=user.id)
+                    userInstance.external_step = 1
+                    userInstance.save()
 
             return Response(
                 serializer.data, status=status.HTTP_201_CREATED, headers=headers
@@ -288,6 +302,86 @@ class CompanyViewSet(viewsets.ModelViewSet):
             serializer = CiiuSerializer(ciiu, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as ex:
+            return Response(
+                {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False)
+    def diagnosis_by_company(self, request: Request):
+        companies = Company.objects.all()
+        diagnostics_data = [
+            {
+                "name": company.name,
+                "total_diagnostics": company.company_diagnosis.count(),
+                "finalized_diagnostics": company.company_diagnosis.filter(
+                    is_finalized=True
+                ).count(),
+                "in_progress_diagnostics": company.company_diagnosis.filter(
+                    in_progress=True
+                ).count(),
+            }
+            for company in companies
+        ]
+
+        return Response(diagnostics_data)
+
+    @action(detail=False, methods=["GET"])
+    def find_company_by_nit(self, request: Request):
+        nit = request.query_params.get("nit")
+        ip_address = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
+
+        if not nit or nit == 0:
+            return Response(
+                {"error": "El nit es obligatorio"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not validate_max_length(nit, 10):
+            return Response(
+                {"error": "El nit debe de ser de maximo 10 caracteres"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not validate_min_length(nit, 10):
+            return Response(
+                {"error": "El nit debe de ser de minimo 10 caracteres"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            try:
+                # Intenta obtener la empresa por el NIT
+                company = Company.objects.get(nit=nit)
+                serializer = CompanySerializer(company)
+                QueryLog.objects.create(
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=ip_address,
+                    action="find_company_by_nit",
+                    http_method=request.method,
+                    query_params=dict(request.query_params),
+                    user_agent=user_agent,
+                )
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except Company.DoesNotExist:
+                # Si no encuentra la empresa, envía una respuesta vacía
+                QueryLog.objects.create(
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=ip_address,
+                    action="find_company_by_nit - company not found",
+                    http_method=request.method,
+                    query_params=dict(request.query_params),
+                    user_agent=user_agent,
+                )
+                return Response({}, status=status.HTTP_200_OK)
+        except Exception as ex:
+            # Registra la excepción en QueryLog
+            QueryLog.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                ip_address=ip_address,
+                action=f"find_company_by_nit - error: {str(ex)}",
+                http_method=request.method,
+                query_params=dict(request.query_params),
+                user_agent=user_agent,
+            )
             return Response(
                 {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

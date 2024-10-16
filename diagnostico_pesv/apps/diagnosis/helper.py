@@ -1,28 +1,38 @@
 from datetime import datetime
 from docx import Document
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, RGBColor
 from docx.oxml import OxmlElement
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.style import WD_STYLE
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
 from docx.table import _Cell
 import numpy as np
 import matplotlib.pyplot as plt
 from io import BytesIO
 import openpyxl
 from openpyxl.chart import BarChart, Reference
-from openpyxl.drawing.image import Image
 import pandas as pd
-import subprocess
 import os
-import pypandoc
-import tempfile
-import pdfkit
 import base64
+from tempfile import NamedTemporaryFile
+from docx2pdf import convert
+import tempfile
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+
+
+def apply_bullets(paragraph):
+    """Aplica viñetas al párrafo usando XML."""
+    p = paragraph._element
+    pPr = p.get_or_add_pPr()
+    numPr = OxmlElement("w:numPr")
+    numId = OxmlElement("w:numId")
+    numId.set(qn("w:val"), "1")  # Utiliza el ID de numeración predeterminado
+    numPr.append(numId)
+    pPr.append(numPr)
+
+
+def add_title(doc: Document, title_text: str):
+    # Agregar un párrafo con el estilo de título
+    title_paragraph = doc.add_paragraph(title_text, style="Body Text")
 
 
 def align_cell_text(cell, horizontal="center", vertical="center"):
@@ -293,6 +303,7 @@ def insert_table_after_placeholder(
     segment,
     contact,
     certification,
+    ciius,
 ):
     """
     Inserta una tabla en el documento justo después del párrafo que contiene el placeholder.
@@ -346,7 +357,13 @@ def insert_table_after_placeholder(
             row_cells[2].merge(row_cells[5])
             row_cells[6].text = "Actividades"
             row_cells[6].merge(row_cells[7])
-            row_cells[8].text = actividades
+            activities_cell = row_cells[8]
+            activities_cell.add_paragraph()
+            # Añadir cada Ciiu como ítem en la lista
+            for ciiu in ciius.all():
+                bullet_paragraph = activities_cell.add_paragraph()
+                bullet_paragraph.text = f"{ciiu.code} - {ciiu.name}"
+                apply_bullets(bullet_paragraph)
             row_cells[8].merge(row_cells[11])
             for cell in row_cells:
                 align_cell_text(cell, "left")
@@ -531,6 +548,310 @@ def insert_table_after_placeholder(
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
 
+def insert_tables_for_companies(
+    doc: Document,
+    placeholder: str,
+    companies: list,
+    fecha,
+    vehicle_questions: list,
+    driver_questions: list,
+    Fleet,
+    Driver,
+    diagnosis,
+):
+    for paragraph in doc.paragraphs:
+        if placeholder in paragraph.text:
+            index = paragraph._element.getparent().index(paragraph._element)
+            for company_data in companies:
+                company = company_data["company"]
+                count_size = company_data["count_size"]
+                total_owned = company_data["total_owned"]
+                total_leasing = company_data["total_leasing"]
+                total_renting = company_data["total_renting"]
+                total_quantity_driver = company_data["total_quantity_driver"]
+
+                title_paragraph = doc.add_paragraph()
+                title_paragraph.add_run(f"{company.name.upper()}").bold = True
+                title_paragraph.alignment = 1  # Centrar el título
+                # Insertar el título en el lugar correcto
+                paragraph._element.getparent().insert(
+                    index + 1, title_paragraph._element
+                )
+                index += 1  # Ajustar el índice para el siguiente elemento
+
+                # Insertar un párrafo vacío para separar el título de la tabla
+                doc.add_paragraph()  # Opcional, para mayor claridad visual
+                paragraph._element.getparent().insert(
+                    index + 1, doc.paragraphs[-1]._element
+                )
+                index += 1  # Ajustar el índice para el siguiente elemento
+
+                # Crear la tabla con el formato especificado
+                table = doc.add_table(rows=1, cols=12)
+                table.style = "Table Grid"
+
+                # Encabezado para "CARACTERIZACION DE LA EMPRESA"
+                heading_row = table.rows[0].cells
+                heading_row[0].text = (
+                    f"CARACTERIZACION DE LA EMPRESA - {company.name.upper()}"
+                )
+                heading_row[0].merge(heading_row[11])
+                for cell in heading_row:
+                    align_cell_text(cell, "center", "center")
+
+                row_cells = table.add_row().cells
+                row_cells[0].text = "Fecha de elaboración"
+                row_cells[0].merge(row_cells[1])
+                row_cells[2].text = fecha
+                row_cells[2].merge(row_cells[5])
+                row_cells[6].text = "Razón Social"
+                row_cells[6].merge(row_cells[7])
+                row_cells[8].text = company.name.upper()
+                row_cells[8].merge(row_cells[11])
+                for cell in row_cells:
+                    align_cell_text(cell, "left")
+                    set_cell_background_color(cell, "2f4858")
+                    set_cell_text_color(cell)
+                    # Agregar fila con NIT y actividades
+                row_cells = table.add_row().cells
+                row_cells[0].text = "Nit"
+                row_cells[0].merge(row_cells[1])
+                row_cells[2].text = company.nit
+                row_cells[2].merge(row_cells[5])
+                row_cells[6].text = "Actividades"
+                row_cells[6].merge(row_cells[7])
+                activities_cell = row_cells[8]
+                activities_cell.add_paragraph()
+                # Añadir cada Ciiu como ítem en la lista
+                for ciiu in company.ciius.all():
+                    bullet_paragraph = activities_cell.add_paragraph()
+                    bullet_paragraph.text = f"{ciiu.code} - {ciiu.name}"
+                    apply_bullets(bullet_paragraph)
+                row_cells[8].merge(row_cells[11])
+                for cell in row_cells:
+                    align_cell_text(cell, "left")
+                    set_cell_background_color(cell, "2f4858")
+                    set_cell_text_color(cell)
+                # Agregar fila con NIT y actividades
+                row_cells = table.add_row().cells
+                row_cells[0].text = "Tamaño de la empresa"
+                row_cells[0].merge(row_cells[1])
+                row_cells[2].text = count_size.name.upper()
+                row_cells[2].merge(row_cells[5])
+                row_cells[6].text = "Segmento al que pertenece"
+                row_cells[6].merge(row_cells[7])
+                row_cells[8].text = company.segment.name.upper()
+                row_cells[8].merge(row_cells[11])
+                for cell in row_cells:
+                    align_cell_text(cell, "left")
+                    set_cell_background_color(cell, "2f4858")
+                    set_cell_text_color(cell)
+                # Agregar fila con NIT y actividades
+                row_cells = table.add_row().cells
+                row_cells[0].text = "Contacto"
+                row_cells[0].merge(row_cells[1])
+                row_cells[2].text = company.dependant
+                row_cells[2].merge(row_cells[5])
+                row_cells[6].text = "Certificaciones adquiridas (Normas ISO)"
+                row_cells[6].merge(row_cells[7])
+                row_cells[8].text = company.acquired_certification or "NINGUNA"
+                row_cells[8].merge(row_cells[11])
+
+                for cell in row_cells:
+                    align_cell_text(cell, "left")
+                    set_cell_background_color(cell, "2f4858")
+                    set_cell_text_color(cell)
+
+                # Agregar fila para Flota de vehículos
+                flota_header_row = table.add_row().cells
+                flota_header_row[0].text = "Flota de vehículos"
+                flota_header_row[0].merge(flota_header_row[11])
+                align_cell_text(flota_header_row[0], "left")
+                set_cell_background_color(flota_header_row[0], "2f4858")
+                set_cell_text_color(flota_header_row[0])
+
+                flota_rows_row = table.add_row().cells
+                flota_rows_row[0].text = "FLOTA DE VEHICULOS AUTOMOTORES"
+                flota_rows_row[0].merge(flota_rows_row[4])
+                flota_rows_row[5].text = "Cantidad Propios"
+                flota_rows_row[6].text = "Cantidad Terceros"
+                flota_rows_row[7].text = "Cantidad Arrendados"
+                flota_rows_row[8].text = "Cantidad Contratistas"
+                flota_rows_row[9].text = "Cantidad Intermediación"
+                flota_rows_row[10].text = "Cantidad Leasing"
+                flota_rows_row[11].text = "Cantidad Renting"
+                for cell in flota_rows_row:
+                    align_cell_text(cell, "left")
+                    set_cell_background_color(cell, "2f4858")
+                    set_cell_text_color(cell)
+
+                fleet_data = Fleet.objects.filter(
+                    diagnosis_counter__company=company,
+                    diagnosis_counter__diagnosis=diagnosis,
+                )
+                driver_data = Driver.objects.filter(
+                    diagnosis_counter__company=company,
+                    diagnosis_counter__diagnosis=diagnosis,
+                )
+                # Variables para almacenar los totales
+                total_propio = 0
+                total_tercero = 0
+                total_arrendado = 0
+                total_contratista = 0
+                total_intermediacion = 0
+                total_leasing = 0
+                total_renting = 0
+                # Insertar datos de flota
+                for vehicle_question in vehicle_questions:
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = vehicle_question.name
+                    row_cells[0].merge(row_cells[4])
+                    align_cell_text(row_cells[0], "left")
+                    set_cell_background_color(row_cells[0], "2f4858")
+                    set_cell_text_color(row_cells[0])
+                    fleet = next(
+                        (
+                            f
+                            for f in fleet_data
+                            if f.vehicle_question.id == vehicle_question.id
+                        ),
+                        None,
+                    )
+                    quantity_propio = fleet.quantity_owned if fleet else 0
+                    quantity_tercero = fleet.quantity_third_party if fleet else 0
+                    quantity_arrendado = fleet.quantity_arrended if fleet else 0
+                    quantity_contratista = fleet.quantity_contractors if fleet else 0
+                    quantity_intermediacion = (
+                        fleet.quantity_intermediation if fleet else 0
+                    )
+                    quantity_leasing = fleet.quantity_leasing if fleet else 0
+                    quantity_renting = fleet.quantity_renting if fleet else 0
+
+                    row_cells[5].text = str(quantity_propio)
+                    row_cells[6].text = str(quantity_tercero)
+                    row_cells[7].text = str(quantity_arrendado)
+                    row_cells[8].text = str(quantity_contratista)
+                    row_cells[9].text = str(quantity_intermediacion)
+                    row_cells[10].text = str(quantity_leasing)
+                    row_cells[11].text = str(quantity_renting)
+                    for cell in row_cells:
+                        align_cell_text(cell)
+
+                    # Sumar cantidades a los totales
+                    total_propio += quantity_propio
+                    total_tercero += quantity_tercero
+                    total_arrendado += quantity_arrendado
+                    total_contratista += quantity_contratista
+                    total_intermediacion += quantity_intermediacion
+                    total_leasing += quantity_leasing
+                    total_renting += quantity_renting
+
+                    total = (
+                        total_propio
+                        + total_tercero
+                        + total_arrendado
+                        + total_contratista
+                        + total_intermediacion
+                        + total_leasing
+                        + total_renting
+                    )
+                    # Agregar fila con los totales
+                total_row = table.add_row().cells
+                total_row[0].text = "Total Vehiculos".upper()
+                total_row[0].merge(total_row[4])
+                align_cell_text(total_row[0], "left")
+                set_cell_background_color(total_row[0], "2f4858")
+                set_cell_text_color(total_row[0])
+                total_row[5].text = str(total)
+                total_row[5].merge(total_row[6])
+                total_row[5].merge(total_row[7])
+                total_row[5].merge(total_row[8])
+                total_row[5].merge(total_row[9])
+                total_row[5].merge(total_row[10])
+                total_row[5].merge(total_row[11])
+
+                # Agregar fila para Conductores
+                driver_header_row = table.add_row().cells
+                driver_header_row[0].text = (
+                    "Personas que conducen con fines misionales".upper()
+                )
+                driver_header_row[0].merge(driver_header_row[8])
+                driver_header_row[9].text = "Cantidad"
+                driver_header_row[9].merge(driver_header_row[11])
+                for cell in driver_header_row:
+                    align_cell_text(cell, "left")
+                    set_cell_background_color(cell, "2f4858")
+                    set_cell_text_color(cell)
+                total_conductores = 0
+                # Datos de conductores
+                for driver_question in driver_questions:
+                    driver_data_row = table.add_row().cells
+                    driver_data_row[0].text = driver_question.name
+                    driver_data_row[0].merge(driver_data_row[8])
+                    align_cell_text(driver_data_row[0], "left")
+                    set_cell_background_color(driver_data_row[0], "2f4858")
+                    set_cell_text_color(driver_data_row[0])
+                    driver = next(
+                        (
+                            f
+                            for f in driver_data
+                            if f.driver_question.id == driver_question.id
+                        ),
+                        None,
+                    )
+                    quantity = driver.quantity if driver else 0
+                    driver_data_row[9].text = str(quantity)
+                    driver_data_row[9].merge(driver_data_row[11])
+                    for cell in driver_data_row:
+                        align_cell_text(cell)
+                    total_conductores += quantity
+                # Agregar fila con los totales
+                total_driver_row = table.add_row().cells
+                total_driver_row[0].text = "Total Conductores".upper()
+                total_driver_row[0].merge(total_driver_row[8])
+                align_cell_text(total_driver_row[0], "left")
+                set_cell_background_color(total_driver_row[0], "2f4858")
+                set_cell_text_color(total_driver_row[0])
+                total_driver_row[9].text = str(total_conductores)
+                total_driver_row[9].merge(total_driver_row[11])
+
+                # Insertar la tabla en la posición correcta
+                paragraph._element.getparent().insert(index + 1, table._element)
+                index += 1  # Ajustar el índice para el siguiente elemento
+
+                # Insertar el párrafo vacío para separar la tabla del resumen
+                doc.add_paragraph()  # Opcional, para mayor claridad visual
+                paragraph._element.getparent().insert(
+                    index + 1, doc.paragraphs[-1]._element
+                )
+                index += 1  # Ajustar el índice para el siguiente elemento
+
+                summary_text = (
+                    f"De acuerdo con la información anterior, se identifica que la empresa "
+                    f"se encuentra en misionalidad {company.mission.id} | {company.mission.name.upper()} "
+                    f"y que cuenta con {total_owned} vehículos propiedad de la empresa y "
+                    f"{total_quantity_driver} personas con rol de conductor, por lo tanto, se define "
+                    f"que debe diseñar e implementar un plan estratégico de seguridad vial "
+                    f"“{count_size.name.upper()}”."
+                )
+                summary_paragraph = doc.add_paragraph(summary_text)
+                summary_paragraph.alignment = 0  # Alinear a la izquierda
+                # Insertar el párrafo en el lugar correcto
+                paragraph._element.getparent().insert(
+                    index + 1, summary_paragraph._element
+                )
+                index += 1  # Ajustar el índice para el siguiente elemento
+
+                # Insertar el párrafo vacío para separar la tabla del resumen
+                doc.add_paragraph()  # Opcional, para mayor claridad visual
+                paragraph._element.getparent().insert(
+                    index + 1, doc.paragraphs[-1]._element
+                )
+                index += 1  # Ajustar el índice para el siguiente elemento
+
+            return  # Salir después de insertar la tabla para evitar múltiples inserciones
+
+
 def insert_table_results(doc: Document, placeholder: str, filtered_data):
     for paragraph in doc.paragraphs:
         if placeholder in paragraph.text:
@@ -589,17 +910,6 @@ def insert_table_results(doc: Document, placeholder: str, filtered_data):
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
 
-def apply_bullets(paragraph):
-    """Aplica viñetas al párrafo usando XML."""
-    p = paragraph._element
-    pPr = p.get_or_add_pPr()
-    numPr = OxmlElement("w:numPr")
-    numId = OxmlElement("w:numId")
-    numId.set(qn("w:val"), "1")  # Utiliza el ID de numeración predeterminado
-    numPr.append(numId)
-    pPr.append(numPr)
-
-
 def insert_table_recomendations(
     doc: Document, placeholder: str, recomendaciones_agrupadas
 ):
@@ -624,6 +934,7 @@ def insert_table_recomendations(
 
             # Insertar datos por ciclo
             for item in recomendaciones_agrupadas:
+
                 ciclo = VALID_STEPS.get(item["cycle"].upper(), "Otros").upper()
                 recomendaciones = item["recomendations"]
                 row = table.add_row().cells
@@ -645,8 +956,11 @@ def insert_table_recomendations(
                 cell.paragraphs[0].clear()  # Limpiar cualquier texto existente
 
                 for recomendacion in recomendaciones:
-                    p = cell.add_paragraph(recomendacion)
+                    p = cell.add_paragraph(recomendacion["recomendacion"])
                     apply_bullets(p)
+                    if recomendacion["observation"]:
+                        p2 = cell.add_paragraph(recomendacion["observation"])
+                        apply_bullets(p2)  # Aplicar viñetas al segundo párrafo
                 row[0].merge(row[5])
                 for cell in row:
                     bottom_border = OxmlElement("w:bottom")
@@ -678,6 +992,61 @@ def set_vertical_cell_direction(cell: _Cell, direction: str, align_center: bool 
 def merge_cells_vertically(cell):
     """Combine vertical cells in the given cell."""
     cell._tc.get_or_add_tcPr().append(OxmlElement("w:vMerge"))
+
+
+def insert_table_work_plan(doc: Document, placeholder: str, data: dict):
+    for paragraph in doc.paragraphs:
+        if placeholder in paragraph.text:
+            index = paragraph._element.getparent().index(paragraph._element)
+            table = doc.add_table(rows=1, cols=8)
+            table.style = "Table Grid"
+
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = "PLAN DE TRABAJO"
+            hdr_cells[0].merge(hdr_cells[5])
+            hdr_cells[6].text = "HORAS"
+            hdr_cells[7].text = ""  # Empty cell
+            # Agregar datos a la tabla
+            VALID_STEPS = {
+                "P": "PLANEAR",
+                "H": "HACER",
+                "V": "VERIFICAR",
+                "A": "ACTUAR",
+            }
+            for cycle, recommendations in data.items():
+                # Fila para el ciclo
+                phase_name = VALID_STEPS.get(cycle.upper(), "Otros").upper()
+                cycle_row = table.add_row().cells
+                cycle_row[0].text = phase_name
+                cycle_row[0].merge(cycle_row[7])
+                align_cell_text(cycle_row[0])
+                if cycle.upper() == "P":
+                    set_cell_background_color(cycle_row[0], "0066B2")
+                elif cycle.upper() == "H":
+                    set_cell_background_color(cycle_row[0], "00A551")
+                elif cycle.upper() == "V":
+                    set_cell_background_color(cycle_row[0], "DCB00A")
+                elif cycle.upper() == "A":
+                    set_cell_background_color(cycle_row[0], "EC1C24")
+                set_cell_text_color(cycle_row[0])
+                # Añadir filas para las recomendaciones bajo el ciclo
+                for rec in recommendations:
+                    rec_row = table.add_row().cells
+                    rec_row[0].text = rec["recommendation_name"]
+                    rec_row[0].merge(rec_row[5])
+            total_row = table.add_row().cells
+            total_row[0].text = "TOTAL HORAS"
+            total_row[0].merge(total_row[5])
+            set_cell_background_color(total_row[0], "2f4858")
+            set_cell_background_color(total_row[6], "2f4858")
+            set_cell_background_color(total_row[7], "2f4858")
+            set_cell_text_color(total_row[0])
+            set_cell_text_color(total_row[6])
+            set_cell_text_color(total_row[7])
+            align_cell_text(total_row[0])
+
+            table._element.getparent().insert(index + 1, table._element)
+            return  # Salir después de insertar la tabla para evitar múltiples inserciones
 
 
 def insert_table_conclusion(
@@ -894,7 +1263,7 @@ def insert_table_conclusion_percentage_articuled(
             )
             title_row[0].merge(title_row[1])
             align_cell_text(title_row[0], "center", "center")
-            
+
             # title_row[1].text = str(count_cumple)  # Cumple
             title_row[2].text = str(count_no_cumple)  # No Cumple
             title_row[2].merge(title_row[3])
@@ -925,19 +1294,24 @@ def insert_table_conclusion_percentage(
                 align_cell_text(cell, "left", "center")
                 set_cell_background_color(cell, "2f4858")
                 set_cell_text_color(cell)
-            total_items = (
-                counts[0]["count"]
-                + counts[1]["count"]
-                + counts[2]["count"]
-                + counts[3]["count"]
-            )
 
             title_row = table.add_row().cells
+
+            for compliance in counts:
+                compliance_id = compliance.id
+                count = compliance.count if compliance.count is not None else 0
+
+                # Asigna el valor en la celda correspondiente en tu tabla
+                if compliance_id == 1:  # Cumple
+                    title_row[1].text = str(count)
+                elif compliance_id == 2:  # No Cumple
+                    title_row[2].text = str(count)
+                elif compliance_id == 3:  # Cumple Parcialmente
+                    title_row[3].text = str(count)
+                elif compliance_id == 4:  # No Aplica
+                    title_row[4].text = str(count)
+            total_items = sum(int(title_row[i].text) for i in range(1, 5))
             title_row[0].text = str(total_items)
-            title_row[1].text = str(counts[0]["count"])  # Cumple
-            title_row[2].text = str(counts[1]["count"])  # No Cumple
-            title_row[3].text = str(counts[2]["count"])  # Cumple Parcialmente
-            title_row[4].text = str(counts[3]["count"])  # No Aplica
             title_row[5].text = f"{perecentaje}%"
             table._element.getparent().insert(index + 1, table._element)
             return  # Salir después de insertar la tabla para evitar múltiples inserciones
@@ -1032,23 +1406,43 @@ def create_bar_chart(datas_by_cycle):
     return image_file
 
 
-def convert_docx_to_pdf_base64(docx_bytes: bytes) -> str:
-    from docx2pdf import convert
+def convert_docx_to_pdf_base64(word_file_content):
+    import subprocess
+    # Guardar el archivo DOCX en el sistema de archivos temporalmente
+    with open("temp_doc.docx", "wb") as temp_doc:
+        temp_doc.write(word_file_content)
 
-    # Leer el contenido del archivo DOCX
-    with BytesIO(docx_bytes) as docx_buffer:
-        # Guardar el contenido DOCX en un archivo temporal
-        with open("temp.docx", "wb") as temp_docx_file:
-            temp_docx_file.write(docx_buffer.getvalue())
+    # Convertir el DOCX a PDF usando LibreOffice
+    subprocess.run(
+        [
+            "libreoffice",
+            "--headless",
+            "--convert-to",
+            "pdf",
+            "temp_doc.docx",
+            "--outdir",
+            ".",
+        ],
+        check=True,
+    )
 
-    convert("temp.docx", "temp.pdf")
-    # Leer el contenido del archivo PDF y convertirlo a base64
-    with open("temp.pdf", "rb") as pdf_file:
+    # Leer el PDF generado
+    with open("temp_doc.pdf", "rb") as pdf_file:
         pdf_content = pdf_file.read()
-        pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
 
-    # Limpiar archivos temporales
-    os.remove("temp.docx")
-    os.remove("temp.pdf")
+    # Eliminar los archivos temporales
+    os.remove("temp_doc.docx")
+    os.remove("temp_doc.pdf")
 
-    return pdf_base64
+    # Convertir el archivo PDF a base64
+    pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
+
+    # Devolver el archivo PDF en base64 y en bytes
+    return pdf_base64, pdf_content
+
+
+def calculate_obtained_value(num_questions):
+    if num_questions == 0:
+        return 0
+    # Supongamos que cada pregunta vale un punto
+    return num_questions

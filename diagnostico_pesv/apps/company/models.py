@@ -2,7 +2,6 @@ from django.db import models
 from timestamps.models import SoftDeletes, Timestampable
 from apps.sign.models import User
 from apps.arl.models import Arl
-from apps.diagnosis.core.models import Diagnosis
 
 
 class Mission(SoftDeletes, Timestampable):
@@ -52,21 +51,10 @@ class Company(SoftDeletes, Timestampable):
     dependant_phone = models.CharField(max_length=20, null=True)
     email = models.CharField(max_length=200, null=True)
     acquired_certification = models.CharField(max_length=255, null=True)
-    consultor = models.OneToOneField(
-        User, on_delete=models.SET_NULL, null=True, unique=True
-    )
     mission = models.ForeignKey(Mission, on_delete=models.CASCADE, null=True)
-    diagnosis_step = models.IntegerField(null=False, default=0)
     arl = models.ForeignKey(Arl, on_delete=models.SET_NULL, null=True, blank=False)
     size = models.ForeignKey(
         CompanySize, on_delete=models.SET_NULL, null=True, blank=False
     )  # Añadido
     ciius = models.ManyToManyField(Ciiu, related_name="companies")
-
-
-class VehicleQuestions(SoftDeletes, Timestampable):  # Cuestionario del diagnostico
-    name = models.CharField(max_length=255, unique=True, null=None)
-
-
-class DriverQuestion(SoftDeletes, Timestampable):
-    name = models.CharField(max_length=255)
+    enable_for_counting = models.BooleanField(default=True)

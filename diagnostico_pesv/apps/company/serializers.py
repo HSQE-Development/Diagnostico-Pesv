@@ -4,16 +4,15 @@ from .models import (
     Segments,
     Mission,
     CompanySize,
-    VehicleQuestions,
-    DriverQuestion,
     SizeCriteria,
     MisionalitySizeCriteria,
     Ciiu,
 )
-from apps.sign.models import User
-from apps.sign.serializers import UserDetailSerializer
 from apps.arl.models import Arl
 from apps.arl.serializers import ArlSerializer
+from apps.diagnosis.models import Diagnosis
+from apps.sign.models import User
+from apps.sign.serializers import UserDetailSerializer
 
 
 class MissionSerializer(serializers.ModelSerializer):
@@ -82,16 +81,44 @@ class CiiuSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "code"]
 
 
+class DiagnosisInCompanySerializer(serializers.ModelSerializer):
+    type = serializers.PrimaryKeyRelatedField(
+        queryset=CompanySize.objects.all(), write_only=True, required=False
+    )
+    type_detail = CompanySizeSerializer(source="type", read_only=True)
+    consultor = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), write_only=True, required=False, allow_null=True
+    )
+    consultor_detail = UserDetailSerializer(source="consultor", read_only=True)
+
+    class Meta:
+        model = Diagnosis
+        fields = [
+            "id",
+            "company",
+            "date_elabored",
+            "is_finalized",
+            "diagnosis_step",
+            "type",
+            "type_detail",
+            "consultor",
+            "consultor_detail",
+            "mode_ejecution",
+            "schedule",
+            "sequence",
+            "observation",
+            "in_progress",
+            "external_count_complete",
+            "is_for_corporate_group",
+            "corporate_group",
+        ]
+
+
 class CompanySerializer(serializers.ModelSerializer):
     segment = serializers.PrimaryKeyRelatedField(
         queryset=Segments.objects.all(), write_only=True
     )
     segment_detail = SegmentSerializer(source="segment", read_only=True)
-
-    consultor = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), write_only=True
-    )
-    consultor_detail = UserDetailSerializer(source="consultor", read_only=True)
 
     mission = serializers.PrimaryKeyRelatedField(
         queryset=Mission.objects.all(), write_only=True
@@ -114,6 +141,8 @@ class CompanySerializer(serializers.ModelSerializer):
     )
     ciius_detail = CiiuSerializer(source="ciius", read_only=True, many=True)
 
+    company_diagnosis = DiagnosisInCompanySerializer(many=True, read_only=True)
+
     class Meta:
         model = Company
         fields = [
@@ -124,13 +153,11 @@ class CompanySerializer(serializers.ModelSerializer):
             "segment_detail",
             "dependant",
             "dependant_phone",
+            "dependant_position",
             "email",
             "acquired_certification",
-            "consultor",
-            "consultor_detail",
             "mission",
             "mission_detail",
-            "diagnosis_step",
             "arl",
             "arl_detail",
             "misionality_size_criteria",
@@ -138,6 +165,8 @@ class CompanySerializer(serializers.ModelSerializer):
             "size_detail",
             "ciius",
             "ciius_detail",
+            "company_diagnosis",
+            "enable_for_counting",
         ]
 
     def get_misionality_size_criteria(self, obj):
@@ -149,21 +178,3 @@ class CompanySerializer(serializers.ModelSerializer):
             misionality_size_criteria, many=True
         )
         return serializer.data
-
-
-class VehicleQuestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VehicleQuestions
-        fields = [
-            "id",
-            "name",
-        ]
-
-
-class DriverQuestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DriverQuestion
-        fields = [
-            "id",
-            "name",
-        ]

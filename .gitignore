@@ -97,7 +97,7 @@ ipython_config.py
 .idea/
 
 # Environments
-.env
+*.env.*
 .venv
 env/
 venv/
@@ -125,3 +125,11 @@ dmypy.json
 
 # VS Code
 .vscode/
+
+# Ignorar el archivo telarana.png
+diagnostico_pesv/telarana.png
+
+# Ignorar todos los archivos con el prefijo temp_doc y cualquier extensión
+diagnostico_pesv/temp_doc.*
+
+/.env

@@ -1,0 +1,16 @@
+services:
+   
+  diagnosis_backend:
+    build:
+      context: ./diagnostico_pesv
+      dockerfile: Dockerfile
+    command: sh -c "/usr/local/bin/wait-for-it.sh 162.215.135.37:33080 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
+    restart: always
+    container_name: pesvapp
+    volumes:
+      - ./diagnostico_pesv:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env
+    depends_on: []  # No depende de 'db' porque MySQL corre por fuera
