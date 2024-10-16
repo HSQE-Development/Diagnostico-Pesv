@@ -30,20 +30,32 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG") == "True"
 
 CORS_ALLOWED_ORIGINS = [
-    "https://apipesv.consultoriaycapacitacionhseq.com",  # Añade aquí tu origen
-    "https://pesvapp.consultoriaycapacitacionhseq.com",  # Añade aquí tu origen
+    "https://pesvapp.consultoriaycapacitacionhseq.com",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
 
-CORS_ALLOW_METHODS = (
-    "DELETE",
+CORS_ALLOW_CREDENTIALS = True  # Permitir credenciales
+CORS_ALLOW_METHODS = [
     "GET",
-    "OPTIONS",
-    "PATCH",
     "POST",
     "PUT",
-)
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+]
+
+CORS_EXPOSE_HEADERS = [
+    "Authorization",
+    "Content-Type",
+]
+
+CORS_ALLOW_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "X-Requested-With",
+    "Accept",
+]
 # Application definition
 
 INSTALLED_APPS = [
