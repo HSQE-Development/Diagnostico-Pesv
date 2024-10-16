@@ -11,11 +11,12 @@ class GroupSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    avatar = Base64ImageField(max_length=None, use_url=True)
+    avatar = Base64ImageField(max_length=None, use_url=True, required=False)
     groups = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Group.objects.all(), required=False
     )
     groups_detail = GroupSerializer(source="groups", read_only=True, many=True)
+    username = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
@@ -31,7 +32,14 @@ class UserSerializer(serializers.ModelSerializer):
             "avatar",
             "groups",  # Agrega el campo groups
             "groups_detail",
+            "change_password",
+            "external_step",
         ]
+        extra_kwargs = {
+            "password": {"write_only": True, "required": False},
+            "username": {"required": False},
+            "avatar": {"required": False},
+        }
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -58,4 +66,6 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "avatar",
             "groups",
             "groups_detail",
+            "change_password",
+            "external_step",
         ]

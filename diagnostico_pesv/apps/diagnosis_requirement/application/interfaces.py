@@ -1,7 +1,7 @@
 from typing import List
 from apps.diagnosis_requirement.core.models import Diagnosis_Requirement
 from abc import ABC, abstractmethod
-from apps.diagnosis.core.models import Checklist_Requirement
+from apps.diagnosis.models import Checklist_Requirement
 
 
 class DiagnosisRequirementRepositoryInterface(ABC):
