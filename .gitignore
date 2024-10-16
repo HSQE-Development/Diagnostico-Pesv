@@ -131,3 +131,5 @@ diagnostico_pesv/telarana.png
 
 # Ignorar todos los archivos con el prefijo temp_doc y cualquier extensión
 diagnostico_pesv/temp_doc.*
+
+/.env
