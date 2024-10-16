@@ -29,7 +29,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG") == "True"
 
-CORS_ALLOWED_ORIGINS = [
+CORS_ORIGIN_WHITELIST = [
     "https://pesvapp.consultoriaycapacitacionhseq.com",  # Añade aquí tu origen
 ]
 # Application definition
