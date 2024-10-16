@@ -69,7 +69,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
 
-CORS_ALLOWED_ORIGINS = ["*"]
+CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_CREDENTIALS = True  # Permitir credenciales
 CORS_ALLOW_METHODS = [
@@ -87,10 +87,15 @@ CORS_EXPOSE_HEADERS = [
 ]
 
 CORS_ALLOW_HEADERS = [
-    "Authorization",
-    "Content-Type",
-    "X-Requested-With",
-    "Accept",
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 TEMPLATES = [
