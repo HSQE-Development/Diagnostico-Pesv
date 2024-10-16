@@ -29,9 +29,21 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG") == "True"
 
-CORS_ORIGIN_WHITELIST = [
+CORS_ALLOWED_ORIGINS = [
+    "https://apipesv.consultoriaycapacitacionhseq.com",  # Añade aquí tu origen
     "https://pesvapp.consultoriaycapacitacionhseq.com",  # Añade aquí tu origen
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
+
+CORS_ALLOW_METHODS = (
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+)
 # Application definition
 
 INSTALLED_APPS = [
