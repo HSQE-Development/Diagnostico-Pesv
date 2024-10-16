@@ -1122,7 +1122,7 @@ class DiagnosisViewSet(viewsets.ModelViewSet):
             buffer.seek(0)
             word_file_content = buffer.getvalue()
             if format_to_save == "pdf":
-                pdf_file_content = convert_docx_to_pdf_base64(word_file_content)
+                pdf_file_content, pdf_byte  = convert_docx_to_pdf_base64(word_file_content)
                 encoded_file = pdf_file_content
             else:  # Default to Word
                 file_content = word_file_content
