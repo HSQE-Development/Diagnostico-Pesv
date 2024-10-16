@@ -234,12 +234,6 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
-CORS_ALLOWED_ORIGINS = [
-    "https://pesvapp.consultoriaycapacitacionhseq.com",
-]
+CORS_ALLOWED_ORIGINS = ["*"]
 CORS_ALLOW_CREDENTIALS = True
-ALLOWED_HOSTS = [
-    "apipesv.consultoriaycapacitacionhseq.com",
-    "pesvapp.consultoriaycapacitacionhseq.com",
-    "localhost",
-]
+ALLOWED_HOSTS = ["*"]
