@@ -12,5 +12,5 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ./.env
-    depends_on: []  # No depende de 'db' porque MySQL corre por fuera
+      - .env
+    depends_on: []
