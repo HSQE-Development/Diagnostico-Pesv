@@ -1,4 +1,6 @@
 from .base import *
+from corsheaders.defaults import default_methods
+from corsheaders.defaults import default_headers
 
 DEBUG = False
 
