@@ -32,7 +32,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG", False)
 
 
-# CORS_ORIGIN_ALLOW_ALL = False
+CORS_ORIGIN_ALLOW_ALL = True
 ALLOWED_HOSTS = ["*"]
 # CORS_ORIGIN_WHITELIST = [
 #     "https://pesvapp.consultoriaycapacitacionhseq.com",
