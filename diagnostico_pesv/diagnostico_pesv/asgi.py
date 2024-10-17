@@ -12,8 +12,11 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from django.core.asgi import get_asgi_application
 from . import routing
+from dotenv import load_dotenv
 
-env = os.getenv("DEBUG", "False")
+load_dotenv()
+
+env = os.getenv("DEBUG", "No hay .env")
 print(f"env: {env}")
 env_debug = "development" if env == "True" else "production"
 settings_module = f"diagnostico_pesv.settings.{env_debug}"
