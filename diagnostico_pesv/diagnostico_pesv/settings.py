@@ -67,11 +67,11 @@ INSTALLED_APPS = [
 ]
 
 
-ROOT_URLCONF = ("diagnostico_pesv.urls",)
 CORS_ORIGIN_ALLOW_ALL = False
 ALLOWED_HOSTS = ["https://pesvapp.consultoriaycapacitacionhseq.com"]
 CORS_ORIGIN_WHITELIST = ("https://pesvapp.consultoriaycapacitacionhseq.com",)
 CORS_ALLOW_METHODS = (*default_methods,)
+ROOT_URLCONF = "diagnostico_pesv.urls"
 
 TEMPLATES = [
     {
