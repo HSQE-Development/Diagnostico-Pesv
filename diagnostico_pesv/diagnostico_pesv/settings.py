@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from datetime import timedelta
 import os
 from corsheaders.defaults import default_methods
+from corsheaders.defaults import default_headers
 
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -69,8 +70,9 @@ INSTALLED_APPS = [
 
 CORS_ORIGIN_ALLOW_ALL = False
 ALLOWED_HOSTS = ["https://pesvapp.consultoriaycapacitacionhseq.com"]
-CORS_ORIGIN_WHITELIST = ("https://pesvapp.consultoriaycapacitacionhseq.com",)
-CORS_ALLOW_METHODS = (*default_methods,)
+CORS_ORIGIN_WHITELIST = ["https://pesvapp.consultoriaycapacitacionhseq.com"]
+CORS_ALLOW_METHODS = list(default_methods)
+CORS_ALLOW_HEADERS = list(default_headers) + ["Authorization"]
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
 TEMPLATES = [
