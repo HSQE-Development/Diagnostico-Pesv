@@ -16,7 +16,6 @@ def main():
     settings_module = f"diagnostico_pesv.settings.{env_debug}"
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
 
-    print(f"Usando configuración: {settings_module}")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
