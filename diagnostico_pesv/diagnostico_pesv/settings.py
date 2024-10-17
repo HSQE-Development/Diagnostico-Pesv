@@ -33,18 +33,6 @@ DEBUG = os.getenv("DEBUG", False)
 
 
 # Application definition
-MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
-]
-
-
 INSTALLED_APPS = [
     "daphne",
     "corsheaders",
@@ -69,15 +57,24 @@ INSTALLED_APPS = [
     "apps.diagnosis_counter",
 ]
 
+MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
 
-CORS_ORIGIN_ALLOW_ALL = False
 ALLOWED_HOSTS = [
     "apipesv.consultoriaycapacitacionhseq.com",
-    "consultoriaycapacitacionhseq.com",
+    "https://apipesv.consultoriaycapacitacionhseq.com",
 ]
-CORS_ORIGIN_WHITELIST = [
+CORS_ORIGIN_ALLOW_ALL = False
+CORS_ALLOWED_ORIGINS = [
     "https://pesvapp.consultoriaycapacitacionhseq.com",
-    "consultoriaycapacitacionhseq.com",
 ]
 CORS_ALLOW_METHODS = list(default_methods)
 CORS_ALLOW_HEADERS = list(default_headers)
