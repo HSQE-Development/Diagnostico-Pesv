@@ -1,10 +1,11 @@
+version: '3.8'
 services:
    
   diagnosis_backend:
     build:
       context: ./diagnostico_pesv
       dockerfile: Dockerfile
-    command: sh -c "/usr/local/bin/wait-for-it.sh 162.215.135.37:33080 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && daphne -p 8000 diagnostico_pesv.asgi:application"
+    command: sh -c "/usr/local/bin/wait-for-it.sh 162.215.135.37:33080 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && python manage.py runserver 0.0.0.0:8000"
     restart: always
     container_name: pesvapp
     volumes:
