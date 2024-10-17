@@ -26,6 +26,14 @@ RUN pip install --upgrade pip && \
 # Copia el código fuente del proyecto al contenedor
 COPY . .
 
+# Establecer la variable de entorno para los settings
+ARG ENVIRONMENT
+ENV DJANGO_SETTINGS_MODULE=diagnostico_pesv.settings.${ENVIRONMENT}
+
+# Imprimir configuración para logging
+RUN python -c "import diagnostico_pesv.settings as settings; print(f'Usando configuración: {settings.DEBUG}, ALLOWED_HOSTS: {settings.ALLOWED_HOSTS}')"
+
+
 # Expone el puerto en el que Django correrá
 EXPOSE 8000
 
