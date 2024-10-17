@@ -11,8 +11,7 @@ load_dotenv(ENV_FILE)
 
 def main():
     """Run administrative tasks."""
-    env = os.getenv("DJANGO_ENV")
-    settings_module = f"src.infrastructure.settings.{env}"
+    settings_module = f"diagnostico_pesv.settings"
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
     try:
         from django.core.management import execute_from_command_line
