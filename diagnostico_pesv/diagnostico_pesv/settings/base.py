@@ -2,8 +2,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
 import os
-from corsheaders.defaults import default_methods
-from corsheaders.defaults import default_headers
 
 load_dotenv()
 
