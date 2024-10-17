@@ -30,4 +30,4 @@ COPY . .
 EXPOSE 8000
 
 # Comando para ejecutar el servidor de desarrollo de Django
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "diagnostico_pesv.wsgi:application"]
+CMD ["daphne", "-p", "8000", "diagnostico_pesv.asgi:application"]

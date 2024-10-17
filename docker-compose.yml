@@ -4,7 +4,7 @@ services:
     build:
       context: ./diagnostico_pesv
       dockerfile: Dockerfile
-    command: sh -c "/usr/local/bin/wait-for-it.sh 162.215.135.37:33080 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:8000 diagnostico_pesv.wsgi:application"
+    command: sh -c "/usr/local/bin/wait-for-it.sh 162.215.135.37:33080 -- python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && daphne -p 8000 diagnostico_pesv.asgi:application"
     restart: always
     container_name: pesvapp
     volumes:
@@ -13,4 +13,6 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - DEBUG=${DEBUG}
     depends_on: []

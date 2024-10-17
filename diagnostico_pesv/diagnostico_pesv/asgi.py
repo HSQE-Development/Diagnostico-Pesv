@@ -13,7 +13,10 @@ from channels.auth import AuthMiddlewareStack
 from django.core.asgi import get_asgi_application
 from . import routing
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "diagnostico_pesv.settings")
+env = os.getenv("DEBUG", "False").lower() in ("true", "1")
+env_debug = "development" if env == True else "production"
+settings_module = f"diagnostico_pesv.settings.{env_debug}"
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
 
 application = ProtocolTypeRouter(
     {
