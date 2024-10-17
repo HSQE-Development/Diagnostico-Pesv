@@ -14,11 +14,11 @@ from django.core.asgi import get_asgi_application
 from . import routing
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../.env"))
+load_dotenv()
 
-env = os.getenv("DEBUG", "No hay .env")
-print(f"env: {env}")
-env_debug = "development" if env == "True" else "production"
+DEBUG = os.getenv("DEBUG", "False") == "True"
+print(f"DEBUG está configurado en: {DEBUG}")
+env_debug = "development" if DEBUG == "True" else "production"
 settings_module = f"diagnostico_pesv.settings.{env_debug}"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
 print(f"Usando configuración: {settings_module}")
