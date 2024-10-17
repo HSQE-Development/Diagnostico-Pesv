@@ -30,6 +30,20 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", False)
+
+
+CORS_ORIGIN_ALLOW_ALL = False
+ALLOWED_HOSTS = [
+    "apipesv.consultoriaycapacitacionhseq.com",
+    "consultoriaycapacitacionhseq.com",
+]
+CORS_ORIGIN_WHITELIST = [
+    "https://pesvapp.consultoriaycapacitacionhseq.com",
+    "consultoriaycapacitacionhseq.com",
+]
+CORS_ALLOW_METHODS = list(default_methods)
+CORS_ALLOW_HEADERS = list(default_headers)
+
 # Application definition
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -68,17 +82,6 @@ INSTALLED_APPS = [
 ]
 
 
-CORS_ORIGIN_ALLOW_ALL = False
-ALLOWED_HOSTS = [
-    "apipesv.consultoriaycapacitacionhseq.com",
-    "consultoriaycapacitacionhseq.com",
-]
-CORS_ORIGIN_WHITELIST = [
-    "https://pesvapp.consultoriaycapacitacionhseq.com",
-    "consultoriaycapacitacionhseq.com",
-]
-CORS_ALLOW_METHODS = list(default_methods)
-CORS_ALLOW_HEADERS = list(default_headers) + ["Authorization"]
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
 TEMPLATES = [
