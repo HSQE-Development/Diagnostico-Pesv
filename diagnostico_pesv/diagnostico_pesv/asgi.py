@@ -12,16 +12,8 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from django.core.asgi import get_asgi_application
 from . import routing
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DEBUG = os.getenv("DEBUG", "False") == "True"
-print(f"DEBUG está configurado en: {DEBUG}")
-env_debug = "development" if DEBUG == "True" else "production"
-settings_module = f"diagnostico_pesv.settings.{env_debug}"
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
-print(f"Usando configuración: {settings_module}")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "diagnostico_pesv.settings")
 
 application = ProtocolTypeRouter(
     {
