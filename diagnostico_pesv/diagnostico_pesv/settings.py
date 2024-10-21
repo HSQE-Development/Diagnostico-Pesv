@@ -11,11 +11,13 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
 from datetime import timedelta
 import os
-from dotenv import load_dotenv
-load_dotenv()
+from corsheaders.defaults import default_methods
+from corsheaders.defaults import default_headers
 
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -27,15 +29,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG") == "True"
-
-ALLOWED_HOSTS = ["*"]
+DEBUG = os.getenv("DEBUG", False)
 
 
 # Application definition
-
 INSTALLED_APPS = [
     "daphne",
+    "corsheaders",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "django_celery_results",
-    "corsheaders",
     "channels",
     "timestamps",
     "django_seed",
@@ -59,16 +58,28 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-CORS_ALLOW_ALL_ORIGINS = True
+
+# ALLOWED_HOSTS = ["*"]
+# CORS_ORIGIN_ALLOW_ALL = True
+ALLOWED_HOSTS = [
+    "apipesv.consultoriaycapacitacionhseq.com",
+    "https://apipesv.consultoriaycapacitacionhseq.com",
+]
+CORS_ORIGIN_ALLOW_ALL = False
+CORS_ALLOWED_ORIGINS = [
+    "https://pesvapp.consultoriaycapacitacionhseq.com",
+]
+CORS_ALLOW_METHODS = list(default_methods)
+CORS_ALLOW_HEADERS = list(default_headers)
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
 TEMPLATES = [

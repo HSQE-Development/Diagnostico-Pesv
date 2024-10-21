@@ -11,9 +11,8 @@ load_dotenv(ENV_FILE)
 
 def main():
     """Run administrative tasks."""
-    env = os.getenv("DJANGO_ENV")
-    settings_module = f"src.infrastructure.settings.{env}"
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "diagnostico_pesv.settings")
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

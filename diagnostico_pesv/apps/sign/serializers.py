@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, Menu
 from django.contrib.auth.models import Group
 from utils.base64Image import Base64ImageField
 
@@ -36,10 +36,25 @@ class UserSerializer(serializers.ModelSerializer):
             "external_step",
         ]
         extra_kwargs = {
-            "password": {"write_only": True, "required": False},
+            "password": {"write_only": True, "required": False, "allow_blank": True},
             "username": {"required": False},
             "avatar": {"required": False},
         }
+
+    def update(self, instance, validated_data):
+        # Si se proporciona una nueva contraseña, la hasheamos
+        password = validated_data.pop(
+            "password", None
+        )  # Extrae la contraseña de los datos validados
+        if password:
+            instance.set_password(password)  # Hashea la nueva contraseña
+
+        # Actualiza otros campos del usuario
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()  # Guarda el usuario
+        return instance
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -69,3 +84,15 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "change_password",
             "external_step",
         ]
+
+
+class MenuSerializer(serializers.ModelSerializer):
+    groups = GroupSerializer(many=True)
+    groups = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Group.objects.all(), required=False
+    )
+    groups_detail = GroupSerializer(source="groups", read_only=True, many=True)
+
+    class Meta:
+        model = Menu
+        fields = ["id", "icon", "label", "path", "groups", "groups_detail"]

@@ -7,8 +7,13 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UserSerializer, UserDetailSerializer, GroupSerializer
-from .models import User
+from .serializers import (
+    UserSerializer,
+    UserDetailSerializer,
+    GroupSerializer,
+    MenuSerializer,
+)
+from .models import User, Menu
 from utils.tokenManagement import (
     get_tokens_for_user,
 )  # Asegúrate de importar correctamente la función
@@ -27,13 +32,14 @@ from .services import (
 )
 import traceback
 from django.db import transaction
+from django.contrib.auth.hashers import make_password
 
 
 @api_view(["GET"])
 @authentication_classes([JWTAuthentication])  #
 def findAll(request):
     try:
-        users = User.objects.all()
+        users = User.objects.all().order_by("-id")
         serializer = UserDetailSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
@@ -226,9 +232,13 @@ def find_by_id(request: Request):
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def update(request: Request):
     user_id = request.data.get("id")
-    user = User.objects.get(pk=user_id)
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
     serializer = UserSerializer(user, data=request.data, partial=True)
     if serializer.is_valid():
+
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -275,6 +285,23 @@ def findAllGroups(request):
     try:
         groups = Group.objects.all()
         serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findMenusByGroups(request: Request):
+    try:
+        groups_ids = request.query_params.get("groups", "")
+        if groups_ids:
+            groups_ids = groups_ids.split(",")
+        menus = Menu.objects.filter(groups__id__in=groups_ids).distinct()
+        serializer = MenuSerializer(menus, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
         return Response(

@@ -13,8 +13,7 @@ COPY requirements.txt .
 
 # Actualiza la lista de paquetes y arregla problemas de red, instala wget y descarga wait-for-it.sh
 RUN apt-get update && \
-    apt-get install -y wget && \
-    apt-get install -y libreoffice && \
+    apt-get install -y wget libreoffice && \
     wget https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -O /usr/local/bin/wait-for-it.sh && \
     chmod +x /usr/local/bin/wait-for-it.sh
 
@@ -25,6 +24,7 @@ RUN pip install --upgrade pip && \
 
 # Copia el código fuente del proyecto al contenedor
 COPY . .
+
 
 # Expone el puerto en el que Django correrá
 EXPOSE 8000

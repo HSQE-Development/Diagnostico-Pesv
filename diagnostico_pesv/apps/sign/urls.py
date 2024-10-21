@@ -30,4 +30,5 @@ urlpatterns = [
     path("<int:id>", views.findById),
     path("findAllGroups", views.findAllGroups),
     path("change_password", views.change_password),
+    path("menus/group", views.findMenusByGroups),
 ]

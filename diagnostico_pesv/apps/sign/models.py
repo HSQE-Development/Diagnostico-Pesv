@@ -1,10 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from timestamps.models import SoftDeletes, Timestampable
+from django.contrib.auth.models import Group
+
 
 # Create your models here.
-
-
 class User(AbstractUser):
     licensia_sst = models.CharField(
         max_length=250, blank=False, null=True, default=None
@@ -25,3 +25,10 @@ class QueryLog(SoftDeletes, Timestampable):
 
     def __str__(self):
         return f"QueryLog by {self.user}"
+
+
+class Menu(SoftDeletes, Timestampable):
+    label = models.CharField(max_length=250)
+    icon = models.CharField(max_length=250)
+    path = models.CharField(max_length=250)
+    groups = models.ManyToManyField(Group, related_name="menus")
