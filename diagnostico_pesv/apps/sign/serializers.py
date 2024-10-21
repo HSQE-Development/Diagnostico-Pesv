@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, Menu
 from django.contrib.auth.models import Group
 from utils.base64Image import Base64ImageField
 
@@ -69,3 +69,15 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "change_password",
             "external_step",
         ]
+
+
+class MenuSerializer(serializers.ModelSerializer):
+    groups = GroupSerializer(many=True)
+    groups = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Group.objects.all(), required=False
+    )
+    groups_detail = GroupSerializer(source="groups", read_only=True, many=True)
+
+    class Meta:
+        model = Menu
+        fields = ["id", "icon", "label", "path", "groups", "groups_detail"]

@@ -7,8 +7,13 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UserSerializer, UserDetailSerializer, GroupSerializer
-from .models import User
+from .serializers import (
+    UserSerializer,
+    UserDetailSerializer,
+    GroupSerializer,
+    MenuSerializer,
+)
+from .models import User, Menu
 from utils.tokenManagement import (
     get_tokens_for_user,
 )  # Asegúrate de importar correctamente la función
@@ -275,6 +280,23 @@ def findAllGroups(request):
     try:
         groups = Group.objects.all()
         serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as ex:
+        return Response(
+            {"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["GET"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])  # Requiere autenticación JWT
+def findMenusByGroups(request: Request):
+    try:
+        groups_ids = request.query_params.get("groups", "")
+        if groups_ids:
+            groups_ids = groups_ids.split(",")
+        menus = Menu.objects.filter(groups__id__in=groups_ids).distinct()
+        serializer = MenuSerializer(menus, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
         return Response(

@@ -1,5 +1,6 @@
 import os
 import django
+from django.core.exceptions import ObjectDoesNotExist
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "diagnostico_pesv.settings")
 django.setup()
@@ -8,6 +9,7 @@ from django.contrib.auth.models import Group
 from apps.sign.models import User
 
 Group.objects.get_or_create(name="SuperAdmin")
+Group.objects.get_or_create(name="Analista")
 Group.objects.get_or_create(name="Admin")
 Group.objects.get_or_create(name="Consultor")
 # Agregar otros roles de ser necesario Group.objects.get_or_create(name="SuperAdmin")
@@ -19,11 +21,11 @@ def assign_role_to_user(user_id, role_name):
         role = Group.objects.get(name=role_name)
         user.groups.add(role)
         user.save()
-        print(f"Rol '{role_name}' asignado al usuario '{user.username}'")
+        return True
     except User.DoesNotExist:
-        print(f"Usuario con ID {user_id} no existe")
+        raise ObjectDoesNotExist(f"Usuario con ID {user_id} no existe")
     except Group.DoesNotExist:
-        print(f"Rol '{role_name}' no existe")
+        raise ObjectDoesNotExist(f"Rol '{role_name}' no existe")
 
 
 # Asigna el rol de SuperAdmin al usuario con ID 1
