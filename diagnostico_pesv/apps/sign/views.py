@@ -32,13 +32,14 @@ from .services import (
 )
 import traceback
 from django.db import transaction
+from django.contrib.auth.hashers import make_password
 
 
 @api_view(["GET"])
 @authentication_classes([JWTAuthentication])  #
 def findAll(request):
     try:
-        users = User.objects.all()
+        users = User.objects.all().order_by("-id")
         serializer = UserDetailSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:
@@ -231,9 +232,13 @@ def find_by_id(request: Request):
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def update(request: Request):
     user_id = request.data.get("id")
-    user = User.objects.get(pk=user_id)
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
     serializer = UserSerializer(user, data=request.data, partial=True)
     if serializer.is_valid():
+
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

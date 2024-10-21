@@ -36,10 +36,25 @@ class UserSerializer(serializers.ModelSerializer):
             "external_step",
         ]
         extra_kwargs = {
-            "password": {"write_only": True, "required": False},
+            "password": {"write_only": True, "required": False, "allow_blank": True},
             "username": {"required": False},
             "avatar": {"required": False},
         }
+
+    def update(self, instance, validated_data):
+        # Si se proporciona una nueva contraseña, la hasheamos
+        password = validated_data.pop(
+            "password", None
+        )  # Extrae la contraseña de los datos validados
+        if password:
+            instance.set_password(password)  # Hashea la nueva contraseña
+
+        # Actualiza otros campos del usuario
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()  # Guarda el usuario
+        return instance
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
