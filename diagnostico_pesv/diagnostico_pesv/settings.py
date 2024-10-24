@@ -68,18 +68,21 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ALLOWED_HOSTS = ["*"]
-CORS_ORIGIN_ALLOW_ALL = True
-# ALLOWED_HOSTS = [
-#     "apipesv.consultoriaycapacitacionhseq.com",
-#     "https://apipesv.consultoriaycapacitacionhseq.com",
-# ]
-# CORS_ORIGIN_ALLOW_ALL = False
-# CORS_ALLOWED_ORIGINS = [
-#     "https://pesvapp.consultoriaycapacitacionhseq.com",
-# ]
-# CORS_ALLOW_METHODS = list(default_methods)
-# CORS_ALLOW_HEADERS = list(default_headers)
+# ALLOWED_HOSTS = ["*"]
+# CORS_ORIGIN_ALLOW_ALL = True
+server_config = os.getenv("SERVER_CONFIG", "127.0.0.1")
+servers = server_config.split(",")
+ALLOWED_HOSTS = [
+    "apipesv.consultoriaycapacitacionhseq.com",
+    "https://apipesv.consultoriaycapacitacionhseq.com",
+    "localhost",
+] + servers
+CORS_ORIGIN_ALLOW_ALL = False
+CORS_ALLOWED_ORIGINS = [
+    "https://pesvapp.consultoriaycapacitacionhseq.com",
+]
+CORS_ALLOW_METHODS = list(default_methods)
+CORS_ALLOW_HEADERS = list(default_headers)
 ROOT_URLCONF = "diagnostico_pesv.urls"
 
 TEMPLATES = [
