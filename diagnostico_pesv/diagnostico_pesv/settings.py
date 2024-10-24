@@ -73,6 +73,8 @@ MIDDLEWARE = [
 ALLOWED_HOSTS = [
     "apipesv.consultoriaycapacitacionhseq.com",
     "https://apipesv.consultoriaycapacitacionhseq.com",
+    "localhost",
+    os.getenv("SERVER_CONFIG", "127.0.0.1"),
 ]
 CORS_ORIGIN_ALLOW_ALL = False
 CORS_ALLOWED_ORIGINS = [
