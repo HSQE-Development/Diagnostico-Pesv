@@ -11,6 +11,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import *
 from .serializers import *
 from utils import functionUtils
+from .services import ArlServices
 import logging
 
 logger = logging.getLogger(__name__)
@@ -54,13 +55,22 @@ def findById(request: Request, id):
 @permission_classes([IsAuthenticated])  # Requiere autenticación JWT
 def save(request: Request):
     try:
-        name = functionUtils.eliminar_tildes(request.data.get("name"))
+        name = functionUtils.eliminar_tildes(request.data.get("name")).upper()
 
         if Arl.objects.filter(name__iexact=name).exists():
             return Response(
                 {"error": "Esta arl ya existe"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # inactive_arl = Arl.objects.filter(name__iexact=name.strip()).first()
+        # if inactive_arl:
+        #     inactive_arl.restore()
+        #     inactive_arl.save()
+
+        #     return Response(
+        #         ArlSerializer(inactive_arl).data, status=status.HTTP_201_CREATED
+        #     )
+
         serializer = ArlSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -111,8 +121,17 @@ def delete(request: Request, id):
     Elimina segun el id proporcionado en la url, se usa soft deletes, osea no elimina el registro como tal
     """
     try:
+        arlServices = ArlServices()
+
         arl = Arl.objects.get(pk=id)
-        arl.delete()
+        can_delete = arlServices.has_no_active_diagnosis_company(arl)
+        if not can_delete:
+            return Response(
+                {"message": "Esta Arl tiene varios diagnosticos activos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        arl.delete(hard=True)
         serializer = ArlSerializer(arl)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as ex:

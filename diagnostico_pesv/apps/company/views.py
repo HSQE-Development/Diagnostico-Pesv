@@ -38,7 +38,6 @@ from django.db import transaction
 from apps.sign.models import User, QueryLog
 from utils.functionUtils import validate_max_length, validate_min_length
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -48,16 +47,18 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+    services = CompanyService()
 
     def get_queryset(self):
         arlId = self.request.query_params.get("arlId")
+        queryset = Company.objects.filter(deleted_at__isnull=True)
         if arlId is not None:
-            return Company.objects.filter(arl=arlId)
-        if IsSuperAdmin().has_permission(
-            user=self.request.user
-        ) or IsAdmin().has_permission(user=self.request.user):
-            return Company.objects_with_deleted
-        return Company.objects.all()
+            queryset = queryset.filter(arl=arlId)
+        # if IsSuperAdmin().has_permission(
+        #     user=self.request.user
+        # ) or IsAdmin().has_permission(user=self.request.user):
+        #     return Company.objects_with_deleted
+        return queryset
 
     def create(self, request: Request, *args, **kwargs):
         try:
@@ -164,10 +165,17 @@ class CompanyViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         try:
             company: Company = self.get_object()
-            company.consultor = None
+
+            if not self.services.has_no_active_diagnosis_company(company):
+                return Response(
+                    {
+                        "error": "Esta empresa tiene diagnosticos activos, no se puede eliminar"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             company.delete()
             return Response(
-                {"detail": "Object deleted successfully"},
+                None,
                 status=status.HTTP_204_NO_CONTENT,
             )
         except Exception as ex:

@@ -66,7 +66,7 @@ def findById(request: Request, id):
 @authentication_classes([JWTAuthentication])  #
 def login(request):
     try:
-        user = User.objects.get(email=request.data["email"])
+        user = User.objects.get(email=request.data["email"].strip())
     except User.DoesNotExist:
         return Response(
             {"error": "Este usuario no se encuentra registrado o esta inactivo"},
@@ -79,7 +79,7 @@ def login(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    if not user.check_password(request.data["password"]):
+    if not user.check_password(request.data["password"].strip()):
         return Response(
             {"error": "Credenciales inválidas"}, status=status.HTTP_400_BAD_REQUEST
         )
