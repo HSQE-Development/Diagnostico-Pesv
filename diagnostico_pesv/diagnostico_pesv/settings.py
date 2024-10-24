@@ -70,12 +70,13 @@ MIDDLEWARE = [
 
 # ALLOWED_HOSTS = ["*"]
 # CORS_ORIGIN_ALLOW_ALL = True
+server_config = os.getenv("SERVER_CONFIG", "127.0.0.1")
+servers = server_config.split(",")
 ALLOWED_HOSTS = [
     "apipesv.consultoriaycapacitacionhseq.com",
     "https://apipesv.consultoriaycapacitacionhseq.com",
     "localhost",
-    os.getenv("SERVER_CONFIG", "127.0.0.1"),
-]
+] + servers
 CORS_ORIGIN_ALLOW_ALL = False
 CORS_ALLOWED_ORIGINS = [
     "https://pesvapp.consultoriaycapacitacionhseq.com",
