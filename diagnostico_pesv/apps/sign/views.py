@@ -19,12 +19,10 @@ from utils.tokenManagement import (
 )  # Asegúrate de importar correctamente la función
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from apps.sign.permissions import IsSuperAdmin, IsConsultor, IsAdmin, GroupTypes
+from apps.sign.permissions import IsSuperAdmin, IsAdmin, GroupTypes
 from django.contrib.auth.models import Group
 import random
 import string
-from django.core.mail import send_mail
-from django.conf import settings
 from .services import (
     send_temporary_password_email,
     generate_username,
@@ -32,7 +30,6 @@ from .services import (
 )
 import traceback
 from django.db import transaction
-from django.contrib.auth.hashers import make_password
 
 
 @api_view(["GET"])
