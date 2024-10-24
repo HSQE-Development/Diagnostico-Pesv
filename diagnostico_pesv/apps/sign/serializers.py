@@ -47,6 +47,7 @@ class UserSerializer(serializers.ModelSerializer):
             "password", None
         )  # Extrae la contraseña de los datos validados
         if password:
+            instance.change_password = False
             instance.set_password(password)  # Hashea la nueva contraseña
 
         # Actualiza otros campos del usuario
