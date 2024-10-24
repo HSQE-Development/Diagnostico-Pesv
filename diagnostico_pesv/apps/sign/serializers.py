@@ -11,7 +11,9 @@ class GroupSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    avatar = Base64ImageField(max_length=None, use_url=True, required=False)
+    avatar = Base64ImageField(
+        max_length=None, use_url=True, required=False, allow_null=True
+    )
     groups = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Group.objects.all(), required=False
     )
